@@ -972,6 +972,8 @@ static struct {
 	int		forwardmove, rightmove, upmove;
 	int		width, height;
 	float	fovX, fovY;
+	int		followTarget;		// client being watched, -1 for the recorded view
+	int		followVisible;		// 0 while that client is absent from the snapshot
 } jkdCam;
 #endif
 
@@ -1275,11 +1277,12 @@ EMSCRIPTEN_KEEPALIVE const char *JKD_GetCamState( void ) {
 	static char buf[256];
 
 	Com_sprintf( buf, sizeof( buf ),
-		"active %i origin %.1f %.1f %.1f angles %.1f %.1f move %i %i %i view %ix%i fov %.1f %.1f",
+		"active %i origin %.1f %.1f %.1f angles %.1f %.1f move %i %i %i view %ix%i fov %.1f %.1f follow %i visible %i",
 		jkdCam.active, jkdCam.origin[0], jkdCam.origin[1], jkdCam.origin[2],
 		jkdCam.angles[PITCH], jkdCam.angles[YAW],
 		jkdCam.forwardmove, jkdCam.rightmove, jkdCam.upmove,
-		jkdCam.width, jkdCam.height, jkdCam.fovX, jkdCam.fovY );
+		jkdCam.width, jkdCam.height, jkdCam.fovX, jkdCam.fovY,
+		jkdCam.followTarget, jkdCam.followVisible );
 	return buf;
 }
 #endif
@@ -1363,6 +1366,118 @@ static void CG_UpdateDemoCam( void ) {
 #endif
 }
 
+/*
+===============
+CG_UpdateDemoFollow
+
+Watch a player other than the one the demo recorded.
+
+This is a chase camera, not that player's own view, and the distinction is real
+rather than a shortcut: a demo carries only the recording client's playerState.
+Everyone else exists as an entityState, which has a body yaw but no view pitch
+and no eye position -- so their actual first-person view simply isn't in the
+file. Reconstructing it means rewriting the demo offline (what DemoReframer
+does), not something playback can do.
+
+The target's position comes from cg_entities[] rather than the snapshot entity
+list, so it benefits from the same interpolation the renderer uses and doesn't
+judder. If the target drops out of the snapshot -- which happens constantly on
+older player-recorded demos, where less than half the match is present at any
+moment -- the camera holds its last known position rather than snapping to the
+world origin.
+===============
+*/
+static qboolean CG_UpdateDemoFollow( void ) {
+	usercmd_t	cmd;
+	centity_t	*cent;
+	trace_t		trace;
+	vec3_t		cmdAngles, forward, focus, wanted;
+	int			i, clientNum, now, elapsed;
+	float		range;
+
+	clientNum = cg_demoFollow.integer;
+	if ( clientNum < 0 || clientNum >= MAX_CLIENTS ) {
+		return qfalse;
+	}
+
+	cent = &cg_entities[ clientNum ];
+	if ( cent->currentValid ) {
+		VectorCopy( cent->lerpOrigin, cg.demoFollowTarget );
+		cg.demoFollowHasTarget = qtrue;
+	} else if ( !cg.demoFollowHasTarget ) {
+		return qfalse;		// never seen them yet, leave the recorded view alone
+	}
+
+	trap_GetUserCmd( trap_GetCurrentCmdNumber(), &cmd );
+	for ( i = 0; i < 3; i++ ) {
+		cmdAngles[i] = SHORT2ANGLE( cmd.angles[i] );
+	}
+
+	now = trap_Milliseconds();
+	if ( !cg.demoFollowActive ) {
+		// start behind them, facing the way they are
+		VectorCopy( cent->lerpAngles, cg.demoFollowAngles );
+		cg.demoFollowAngles[PITCH] = 10;
+		cg.demoFollowAngles[ROLL] = 0;
+		VectorCopy( cmdAngles, cg.demoFollowLastCmdAngles );
+		cg.demoFollowTime = now;
+		cg.demoFollowActive = qtrue;
+	}
+	elapsed = now - cg.demoFollowTime;
+	cg.demoFollowTime = now;
+	if ( elapsed < 0 ) {
+		elapsed = 0;
+	}
+
+	// mouse orbits the target; same usercmd-delta trick the free camera uses,
+	// because cl.viewangles is meaningless during playback
+	for ( i = 0; i < 2; i++ ) {
+		cg.demoFollowAngles[i] = AngleNormalize180( cg.demoFollowAngles[i] +
+			AngleNormalize180( cmdAngles[i] - cg.demoFollowLastCmdAngles[i] ) );
+	}
+	VectorCopy( cmdAngles, cg.demoFollowLastCmdAngles );
+
+	if ( cg.demoFollowAngles[PITCH] > 80 ) {
+		cg.demoFollowAngles[PITCH] = 80;
+	} else if ( cg.demoFollowAngles[PITCH] < -80 ) {
+		cg.demoFollowAngles[PITCH] = -80;
+	}
+	cg.demoFollowAngles[ROLL] = 0;
+
+	// eye height, so the camera looks at the head rather than the feet
+	VectorCopy( cg.demoFollowTarget, focus );
+	focus[2] += DEFAULT_VIEWHEIGHT;
+	focus[2] += cg_thirdPersonVertOffset.value;
+
+	range = cg_thirdPersonRange.value;
+	if ( range < 1 ) {
+		range = 80;
+	}
+
+	AngleVectors( cg.demoFollowAngles, forward, NULL, NULL );
+	VectorMA( focus, -range, forward, wanted );
+
+	// pull in if the wall is closer than the requested distance, so the camera
+	// doesn't end up inside geometry looking at the inside of a brush
+	CG_Trace( &trace, focus, cameramins, cameramaxs, wanted, clientNum, MASK_CAMERACLIP );
+	if ( trace.fraction < 1.0f ) {
+		VectorCopy( trace.endpos, wanted );
+	}
+
+	VectorCopy( wanted, cg.refdef.vieworg );
+	VectorCopy( cg.demoFollowAngles, cg.refdefViewAngles );
+	AnglesToAxis( cg.refdefViewAngles, cg.refdef.viewaxis );
+
+#ifdef __EMSCRIPTEN__
+	jkdCam.active = 2;
+	VectorCopy( cg.refdef.vieworg, jkdCam.origin );
+	VectorCopy( cg.demoFollowAngles, jkdCam.angles );
+	jkdCam.followTarget = clientNum;
+	jkdCam.followVisible = cent->currentValid ? 1 : 0;
+#endif
+	return qtrue;
+}
+
 static int CG_CalcViewValues( void ) {
 	playerState_t	*ps;
 
@@ -1388,8 +1503,18 @@ static int CG_CalcViewValues( void ) {
 		cg.demoCamActive = qfalse;
 		trap_Cvar_Set( "r_novis", "0" );
 	}
+
+	// Watching another player is checked after the free camera, so free flight
+	// always wins if both are somehow set -- it's the more explicit request.
+	if ( CG_UpdateDemoFollow() ) {
+		return CG_CalcFov();
+	}
+	cg.demoFollowActive = qfalse;
+	cg.demoFollowHasTarget = qfalse;
+
 #ifdef __EMSCRIPTEN__
 	jkdCam.active = 0;
+	jkdCam.followTarget = -1;
 #endif
 /*
 	if (cg.cameraMode) {
@@ -1797,8 +1922,8 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView, qboolean demo
 		cg.renderingThirdPerson = 0;
 	}
 
-	if ( cg_demoCam.integer )
-	{ //the camera has left the player entirely, so their model has to be drawn
+	if ( cg_demoCam.integer || cg_demoFollow.integer >= 0 )
+	{ //the camera has left the recorded player, so their model has to be drawn
 		//and the first-person gun has to go
 		cg.renderingThirdPerson = 1;
 	}

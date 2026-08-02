@@ -2551,8 +2551,15 @@ static void CG_DrawCrosshair( vec3_t worldPoint, int chEntValid ) {
 	float		f;
 	float		x, y;
 
-	if ( !cg_drawCrosshair.integer ) 
+	if ( !cg_drawCrosshair.integer )
 	{
+		return;
+	}
+
+	if ( cg_demoCam.integer || cg_demoFollow.integer >= 0 )
+	{ //a detached camera isn't aiming at anything, and the recorded player's
+	  //crosshair floating in the middle of someone else's view is the single
+	  //thing that most gives away that the view is still bolted to them
 		return;
 	}
 

@@ -726,6 +726,15 @@ typedef struct {
 	qboolean	demoCamActive;
 	int			demoCamTime;			// trap_Milliseconds at the last camera update
 	vec3_t		demoCamOrigin;
+
+	// POV switching (cg_demoFollow). Orbit angles are kept separately from the
+	// free camera's, so switching between the two doesn't scramble either.
+	qboolean	demoFollowActive;
+	int			demoFollowTime;
+	vec3_t		demoFollowAngles;		// orbit yaw/pitch around the target
+	vec3_t		demoFollowLastCmdAngles;
+	vec3_t		demoFollowTarget;		// last known target position, held if it drops out
+	qboolean	demoFollowHasTarget;
 	vec3_t		demoCamAngles;
 	vec3_t		demoCamLastCmdAngles;
 
@@ -1521,6 +1530,7 @@ extern	vmCvar_t		cg_fovAspectAdjust;
 
 extern	vmCvar_t		cg_demoCam;
 extern	vmCvar_t		cg_demoCamSpeed;
+extern	vmCvar_t		cg_demoFollow;
 
 extern	vmCvar_t		cg_thirdPerson;
 extern	vmCvar_t		cg_thirdPersonRange;
