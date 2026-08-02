@@ -685,7 +685,17 @@ static cvarTable_t cvarTable[] = { // bk001129
 	{ &cg_dismember, "cg_dismember", "0", CVAR_ARCHIVE },
 
 	{ &cg_widescreen, "cg_widescreen", "1", CVAR_ARCHIVE },
+#ifdef __EMSCRIPTEN__
+	// A browser window is almost never 4:3. Off, cg_fov is a *horizontal* FOV
+	// sized for 4:3, so a wide window crops vertically instead of widening --
+	// 80 fov at 2:1 leaves 45.8 degrees of vertical view where 4:3 gives 64.4,
+	// which reads as being zoomed in. On, cg_fov keeps its 4:3 vertical FOV and
+	// the extra width is added alongside (hor+), which is what the viewer
+	// expects and what every modern game does.
+	{ &cg_fovAspectAdjust, "cg_fovAspectAdjust", "1", CVAR_ARCHIVE },
+#else
 	{ &cg_fovAspectAdjust, "cg_fovAspectAdjust", "0", CVAR_ARCHIVE },
+#endif
 
 	{ &cg_thirdPerson, "cg_thirdPerson", "0", 0 },
 	// Detached demo camera. Not CVAR_CHEAT like the third-person set below: the

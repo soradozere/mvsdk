@@ -959,6 +959,22 @@ Fixed fov at intermissions, otherwise account for fov variable and zooms.
 #define	WAVE_FREQUENCY	0.4
 float zoomFov; //this has to be global client-side
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+// Camera and view state for the page. Filled from inside the frame and only
+// read by JKD_GetCamState below: exported functions run outside VM_Call, where
+// any trap_* would longjmp into a context that no longer exists
+// ("EmscriptenSjLj"). Doubles as the "cam" half of a shareable deep link later.
+static struct {
+	int		active;
+	vec3_t	origin;
+	vec3_t	angles;
+	int		forwardmove, rightmove, upmove;
+	int		width, height;
+	float	fovX, fovY;
+} jkdCam;
+#endif
+
 static int CG_CalcFov( void ) {
 	float	x;
 	float	phase;
@@ -1094,6 +1110,15 @@ static int CG_CalcFov( void ) {
 	// set it
 	cg.refdef.fov_x = fov_x;
 	cg.refdef.fov_y = fov_y;
+
+#ifdef __EMSCRIPTEN__
+	// reported to the page, so "it looks zoomed in" can be checked against
+	// numbers rather than argued about from a screenshot
+	jkdCam.width = cg.refdef.width;
+	jkdCam.height = cg.refdef.height;
+	jkdCam.fovX = fov_x;
+	jkdCam.fovY = fov_y;
+#endif
 
 	if (cg.predictedPlayerState.zoomMode)
 	{
@@ -1246,26 +1271,15 @@ point of a free camera, and it's what every JK2 demo mod does.
 ===============
 */
 #ifdef __EMSCRIPTEN__
-#include <emscripten.h>
-// Camera state for the page. Filled from inside the frame and only read here:
-// exported functions run outside VM_Call, where any trap_* would longjmp into a
-// context that no longer exists ("EmscriptenSjLj"). Doubles as the "cam" half of
-// a shareable deep link later on.
-static struct {
-	int		active;
-	vec3_t	origin;
-	vec3_t	angles;
-	int		forwardmove, rightmove, upmove;
-} jkdCam;
-
 EMSCRIPTEN_KEEPALIVE const char *JKD_GetCamState( void ) {
 	static char buf[256];
 
 	Com_sprintf( buf, sizeof( buf ),
-		"active %i origin %.1f %.1f %.1f angles %.1f %.1f move %i %i %i",
+		"active %i origin %.1f %.1f %.1f angles %.1f %.1f move %i %i %i view %ix%i fov %.1f %.1f",
 		jkdCam.active, jkdCam.origin[0], jkdCam.origin[1], jkdCam.origin[2],
 		jkdCam.angles[PITCH], jkdCam.angles[YAW],
-		jkdCam.forwardmove, jkdCam.rightmove, jkdCam.upmove );
+		jkdCam.forwardmove, jkdCam.rightmove, jkdCam.upmove,
+		jkdCam.width, jkdCam.height, jkdCam.fovX, jkdCam.fovY );
 	return buf;
 }
 #endif
