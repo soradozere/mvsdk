@@ -719,6 +719,16 @@ typedef struct {
 	refdef_t	refdef;
 	vec3_t		refdefViewAngles;		// will be converted to refdef.viewaxis
 
+	// detached demo camera (cg_demoCam). Angles are integrated from usercmd
+	// deltas rather than taken outright: during demo playback cl.viewangles
+	// drifts free of the recorded view, so its absolute value is meaningless
+	// and reading it directly would snap the camera on the frame we detach.
+	qboolean	demoCamActive;
+	int			demoCamTime;			// trap_Milliseconds at the last camera update
+	vec3_t		demoCamOrigin;
+	vec3_t		demoCamAngles;
+	vec3_t		demoCamLastCmdAngles;
+
 	float		constrictValue;
 	float		constrict;
 	int			doConstrict;
@@ -1508,6 +1518,9 @@ extern	vmCvar_t		cg_dismember;
 
 extern	vmCvar_t		cg_widescreen;
 extern	vmCvar_t		cg_fovAspectAdjust;
+
+extern	vmCvar_t		cg_demoCam;
+extern	vmCvar_t		cg_demoCamSpeed;
 
 extern	vmCvar_t		cg_thirdPerson;
 extern	vmCvar_t		cg_thirdPersonRange;

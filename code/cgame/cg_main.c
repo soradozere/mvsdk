@@ -519,6 +519,9 @@ vmCvar_t	cg_dismember;
 vmCvar_t	cg_widescreen;
 vmCvar_t	cg_fovAspectAdjust;
 
+vmCvar_t	cg_demoCam;
+vmCvar_t	cg_demoCamSpeed;
+
 vmCvar_t	cg_thirdPerson;
 vmCvar_t	cg_thirdPersonRange;
 vmCvar_t	cg_thirdPersonAngle;
@@ -685,6 +688,10 @@ static cvarTable_t cvarTable[] = { // bk001129
 	{ &cg_fovAspectAdjust, "cg_fovAspectAdjust", "0", CVAR_ARCHIVE },
 
 	{ &cg_thirdPerson, "cg_thirdPerson", "0", 0 },
+	// Detached demo camera. Not CVAR_CHEAT like the third-person set below: the
+	// web player has to be able to set it during ordinary demo playback.
+	{ &cg_demoCam, "cg_demoCam", "0", 0 },
+	{ &cg_demoCamSpeed, "cg_demoCamSpeed", "800", 0 },
 	{ &cg_thirdPersonRange, "cg_thirdPersonRange", "80", CVAR_CHEAT },
 	{ &cg_thirdPersonAngle, "cg_thirdPersonAngle", "0", CVAR_CHEAT },
 	{ &cg_thirdPersonPitchOffset, "cg_thirdPersonPitchOffset", "0", CVAR_CHEAT },

@@ -1228,6 +1228,116 @@ CG_CalcViewValues
 Sets cg.refdef view values
 ===============
 */
+/*
+===============
+CG_UpdateDemoCam
+
+Free-flying camera for demo playback. The engine still builds usercmds while a
+demo plays -- only sending them is skipped -- so mouse look and the movement
+keys are already available here through trap_GetUserCmd, and the camera gets the
+player's own sensitivity and bindings for free.
+
+Angles are integrated from frame-to-frame usercmd deltas. cl.viewangles is not
+tied to the recorded view during playback, so its absolute value is arbitrary;
+using deltas means detaching the camera never snaps it somewhere unexpected.
+
+Deliberately does not trace against the world -- flying through geometry is the
+point of a free camera, and it's what every JK2 demo mod does.
+===============
+*/
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+// Camera state for the page. Filled from inside the frame and only read here:
+// exported functions run outside VM_Call, where any trap_* would longjmp into a
+// context that no longer exists ("EmscriptenSjLj"). Doubles as the "cam" half of
+// a shareable deep link later on.
+static struct {
+	int		active;
+	vec3_t	origin;
+	vec3_t	angles;
+	int		forwardmove, rightmove, upmove;
+} jkdCam;
+
+EMSCRIPTEN_KEEPALIVE const char *JKD_GetCamState( void ) {
+	static char buf[256];
+
+	Com_sprintf( buf, sizeof( buf ),
+		"active %i origin %.1f %.1f %.1f angles %.1f %.1f move %i %i %i",
+		jkdCam.active, jkdCam.origin[0], jkdCam.origin[1], jkdCam.origin[2],
+		jkdCam.angles[PITCH], jkdCam.angles[YAW],
+		jkdCam.forwardmove, jkdCam.rightmove, jkdCam.upmove );
+	return buf;
+}
+#endif
+
+static void CG_UpdateDemoCam( void ) {
+	usercmd_t	cmd;
+	vec3_t		cmdAngles, forward, right, up;
+	float		frac, speed;
+	int			i, now, elapsed;
+
+	trap_GetUserCmd( trap_GetCurrentCmdNumber(), &cmd );
+	for ( i = 0; i < 3; i++ ) {
+		cmdAngles[i] = SHORT2ANGLE( cmd.angles[i] );
+	}
+
+	now = trap_Milliseconds();
+	if ( !cg.demoCamActive ) {
+		// seed from the view we're detaching from so there's no jump
+		VectorCopy( cg.predictedPlayerState.origin, cg.demoCamOrigin );
+		cg.demoCamOrigin[2] += cg.predictedPlayerState.viewheight;
+		VectorCopy( cg.predictedPlayerState.viewangles, cg.demoCamAngles );
+		VectorCopy( cmdAngles, cg.demoCamLastCmdAngles );
+		cg.demoCamTime = now;
+		cg.demoCamActive = qtrue;
+	}
+	elapsed = now - cg.demoCamTime;
+	cg.demoCamTime = now;
+	if ( elapsed < 0 ) {
+		elapsed = 0;
+	} else if ( elapsed > 100 ) {
+		elapsed = 100;		// don't lurch across the map after a hitch
+	}
+
+	for ( i = 0; i < 3; i++ ) {
+		cg.demoCamAngles[i] = AngleNormalize180( cg.demoCamAngles[i] +
+			AngleNormalize180( cmdAngles[i] - cg.demoCamLastCmdAngles[i] ) );
+	}
+	VectorCopy( cmdAngles, cg.demoCamLastCmdAngles );
+
+	if ( cg.demoCamAngles[PITCH] > 89 ) {
+		cg.demoCamAngles[PITCH] = 89;
+	} else if ( cg.demoCamAngles[PITCH] < -89 ) {
+		cg.demoCamAngles[PITCH] = -89;
+	}
+	cg.demoCamAngles[ROLL] = 0;
+
+	AngleVectors( cg.demoCamAngles, forward, right, up );
+
+	// usercmd movement is -127..127. Paced off trap_Milliseconds rather than
+	// cg.frametime, which is derived from server time: that goes to zero when
+	// the demo is paused or slowed, and being able to fly around a frozen moment
+	// is most of the point of a demo camera.
+	speed = cg_demoCamSpeed.value;
+	if ( speed <= 0 ) {
+		speed = 800;
+	}
+	frac = ( speed / 127.0f ) * ( elapsed * 0.001f );
+
+	VectorMA( cg.demoCamOrigin, cmd.forwardmove * frac, forward, cg.demoCamOrigin );
+	VectorMA( cg.demoCamOrigin, cmd.rightmove * frac, right, cg.demoCamOrigin );
+	cg.demoCamOrigin[2] += cmd.upmove * frac;
+
+#ifdef __EMSCRIPTEN__
+	jkdCam.active = 1;
+	VectorCopy( cg.demoCamOrigin, jkdCam.origin );
+	VectorCopy( cg.demoCamAngles, jkdCam.angles );
+	jkdCam.forwardmove = cmd.forwardmove;
+	jkdCam.rightmove = cmd.rightmove;
+	jkdCam.upmove = cmd.upmove;
+#endif
+}
+
 static int CG_CalcViewValues( void ) {
 	playerState_t	*ps;
 
@@ -1241,6 +1351,18 @@ static int CG_CalcViewValues( void ) {
 	CG_CalcVrect();
 
 	ps = &cg.predictedPlayerState;
+
+	if ( cg_demoCam.integer ) {
+		CG_UpdateDemoCam();
+		VectorCopy( cg.demoCamOrigin, cg.refdef.vieworg );
+		VectorCopy( cg.demoCamAngles, cg.refdefViewAngles );
+		AnglesToAxis( cg.refdefViewAngles, cg.refdef.viewaxis );
+		return CG_CalcFov();
+	}
+	cg.demoCamActive = qfalse;
+#ifdef __EMSCRIPTEN__
+	jkdCam.active = 0;
+#endif
 /*
 	if (cg.cameraMode) {
 		vec3_t origin, angles;
@@ -1645,6 +1767,12 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView, qboolean demo
 	else if (cg.snap->ps.zoomMode)
 	{ //always force first person when zoomed
 		cg.renderingThirdPerson = 0;
+	}
+
+	if ( cg_demoCam.integer )
+	{ //the camera has left the player entirely, so their model has to be drawn
+		//and the first-person gun has to go
+		cg.renderingThirdPerson = 1;
 	}
 
 	// build cg.refdef
