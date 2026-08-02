@@ -3496,6 +3496,13 @@ static qboolean CG_DrawFollow( void )
 		return qfalse;
 	}
 
+#ifdef __EMSCRIPTEN__
+	// The page draws this itself, from JKD_GetViewClientNum + JKD_GetPlayerInfo,
+	// so it can be styled as part of the site rather than looking like the game.
+	// Still returns qtrue, so the warmup text stays suppressed exactly as before.
+	return qtrue;
+#endif
+
 //	s = "following";
 	s = CG_GetStripEdString("INGAMETEXT", "FOLLOWING");
 	x = 0.5f * (cgs.screenWidth - CG_Text_Width(s, 1.0f, FONT_MEDIUM));
