@@ -1304,6 +1304,17 @@ static void CG_UpdateDemoCam( void ) {
 		VectorCopy( cmdAngles, cg.demoCamLastCmdAngles );
 		cg.demoCamTime = now;
 		cg.demoCamActive = qtrue;
+
+		// The BSP's cluster PVS is built for a player standing in a leaf. A
+		// detached camera routinely sits inside a wall or in the void, where the
+		// cluster it lands in sees almost nothing and most of the level is
+		// culled away to hard-edged black. r_novis marks every non-solid node
+		// visible instead, which is the only way a free camera can be trusted to
+		// show what's actually there. Cheap here: the map is already resident,
+		// and a CTF map is small enough that drawing it all costs nothing we'd
+		// notice. Set on the transition rather than per frame, and put back on
+		// the way out so the recorded view keeps the engine's normal culling.
+		trap_Cvar_Set( "r_novis", "1" );
 	}
 	elapsed = now - cg.demoCamTime;
 	cg.demoCamTime = now;
@@ -1373,7 +1384,10 @@ static int CG_CalcViewValues( void ) {
 		AnglesToAxis( cg.refdefViewAngles, cg.refdef.viewaxis );
 		return CG_CalcFov();
 	}
-	cg.demoCamActive = qfalse;
+	if ( cg.demoCamActive ) {
+		cg.demoCamActive = qfalse;
+		trap_Cvar_Set( "r_novis", "0" );
+	}
 #ifdef __EMSCRIPTEN__
 	jkdCam.active = 0;
 #endif
@@ -1824,7 +1838,20 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView, qboolean demo
 		CG_AddTestModel();
 	}
 	cg.refdef.time = cg.time;
-	memcpy( cg.refdef.areamask, cg.snap->areamask, sizeof( cg.refdef.areamask ) );
+	if ( cg_demoCam.integer ) {
+		// The snapshot's areamask is the server's door/portal visibility computed
+		// for where the *recorder* was standing, and R_MarkLeaves culls every
+		// world leaf whose area is masked out. Honour it with a detached camera
+		// and the level goes black around you the moment you fly somewhere the
+		// recorder couldn't see -- while players keep drawing, because entities
+		// aren't area-culled the same way. Nothing is actually missing: the BSP
+		// is a local file with all its geometry and lightmaps. So drop the mask
+		// and let cluster PVS from the camera's own position do the culling.
+		// (TomArrow's DemoMerger ships the same escape hatch as --visall.)
+		memset( cg.refdef.areamask, 0, sizeof( cg.refdef.areamask ) );
+	} else {
+		memcpy( cg.refdef.areamask, cg.snap->areamask, sizeof( cg.refdef.areamask ) );
+	}
 
 	// warning sounds when powerup is wearing off
 	CG_PowerupTimerSounds();
