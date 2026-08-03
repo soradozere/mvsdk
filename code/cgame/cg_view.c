@@ -1408,18 +1408,25 @@ static void CG_UpdateDemoCam( void ) {
 #endif
 }
 
+// Defined in cg_ents.c and used below to interpolate the follow target at view
+// time. It has no declaration in any header -- cg_public.h carries only a
+// commented-out one -- so it is declared here rather than added to a shared
+// header this file is the only consumer of.
+void CG_CalcEntityLerpPositions( centity_t *cent );
+
 /*
 ===============
 CG_UpdateDemoFollow
 
 Watch a player other than the one the demo recorded.
 
-This is a chase camera, not that player's own view, and the distinction is real
-rather than a shortcut: a demo carries only the recording client's playerState.
-Everyone else exists as an entityState, which has a body yaw but no view pitch
-and no eye position -- so their actual first-person view simply isn't in the
-file. Reconstructing it means rewriting the demo offline (what DemoReframer
-does), not something playback can do.
+Both a real first-person view and a chase camera, chosen by cg_thirdPerson.
+
+First person is genuine, not reconstructed: PlayerStateToEntityState copies the
+whole of ps->viewangles -- pitch included -- into s.apos, so every player's look
+direction is in the demo, and lerpAngles is that trajectory evaluated for the
+current frame. Only eye height is approximate, since viewheight isn't
+transmitted and a crouching player is watched from standing height.
 
 The target's position comes from cg_entities[] rather than the snapshot entity
 list, so it benefits from the same interpolation the renderer uses and doesn't
@@ -1444,6 +1451,20 @@ static qboolean CG_UpdateDemoFollow( void ) {
 
 	cent = &cg_entities[ clientNum ];
 	if ( cent->currentValid ) {
+		/*
+		Interpolate the target here rather than trusting cent->lerpOrigin.
+
+		This runs inside CG_CalcViewValues, and every entity's lerpOrigin is
+		recomputed later in the same frame by CG_AddPacketEntities -- so reading
+		it here gets *last* frame's position, while the player model is drawn
+		from this frame's. The camera trails the model by exactly one frame,
+		which reads as the model swimming and lagging rather than as a camera
+		fault.
+
+		cgame already does this for the recorded player for the same reason,
+		just before it builds the scene.
+		*/
+		CG_CalcEntityLerpPositions( cent );
 		VectorCopy( cent->lerpOrigin, cg.demoFollowTarget );
 		cg.demoFollowHasTarget = qtrue;
 	} else if ( !cg.demoFollowHasTarget ) {
@@ -1489,6 +1510,35 @@ static qboolean CG_UpdateDemoFollow( void ) {
 	// eye height, so the camera looks at the head rather than the feet
 	VectorCopy( cg.demoFollowTarget, focus );
 	focus[2] += DEFAULT_VIEWHEIGHT;
+
+	/*
+	First person: sit in the target's eyes and look where they were looking.
+
+	This is genuinely their view, not an approximation of it.
+	PlayerStateToEntityState copies the whole of ps->viewangles -- pitch
+	included -- into s.apos, so every player's look direction travels in the
+	demo, and cent->lerpAngles is that trajectory evaluated for this frame.
+	Only the eye height is approximate: viewheight isn't transmitted, so a
+	crouching player is watched from standing height.
+
+	Chase is still there on cg_thirdPerson, which is what the viewer's
+	Follow/Chase buttons already drive.
+	*/
+	if ( !cg_thirdPerson.integer ) {
+		VectorCopy( focus, cg.refdef.vieworg );
+		VectorCopy( cent->lerpAngles, cg.refdefViewAngles );
+		cg.refdefViewAngles[ROLL] = 0;
+		AnglesToAxis( cg.refdefViewAngles, cg.refdef.viewaxis );
+#ifdef __EMSCRIPTEN__
+		jkdCam.active = 2;
+		VectorCopy( cg.refdef.vieworg, jkdCam.origin );
+		VectorCopy( cg.refdefViewAngles, jkdCam.angles );
+		jkdCam.followTarget = clientNum;
+		jkdCam.followVisible = cent->currentValid ? 1 : 0;
+#endif
+		return qtrue;
+	}
+
 	focus[2] += cg_thirdPersonVertOffset.value;
 
 	range = cg_thirdPersonRange.value;
