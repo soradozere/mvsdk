@@ -2286,6 +2286,18 @@ static void CG_DrawDisconnect( void ) {
 	const char		*s;
 	int			w;  // bk010215 - FIXME char message[1024];
 
+#ifdef __EMSCRIPTEN__
+	/*
+	Never in the viewer. This decides there is a problem by comparing the oldest
+	buffered usercmd against the snapshot, which means something during a live
+	game and nothing at all during playback -- there is no connection to
+	interrupt. It fires constantly while watching a demo, and more so in slow
+	motion or when frames drop, painting "Connection Interrupted" across the
+	middle of the screen.
+	*/
+	return;
+#endif
+
 	if (cg.mMapChange)
 	{			
 		s = CG_GetStripEdString("INGAMETEXT", "SERVER_CHANGING_MAPS");	// s = "Server Changing Maps";			
