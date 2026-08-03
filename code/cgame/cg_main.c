@@ -637,7 +637,13 @@ static cvarTable_t cvarTable[] = { // bk001129
 	{ &cg_drawScores,		  "cg_drawScores", "1", CVAR_ARCHIVE },
 	{ &cg_dynamicCrosshair, "cg_dynamicCrosshair", "1", CVAR_ARCHIVE },
 	{ &cg_drawRewards, "cg_drawRewards", "1", CVAR_ARCHIVE },
+#ifdef __EMSCRIPTEN__
+	// Default (24) reads as oversized on the site: a quarter of it, same idea as
+	// the fov override above -- tuned for watching, not the original in-game default.
+	{ &cg_crosshairSize, "cg_crosshairSize", "6", CVAR_ARCHIVE },
+#else
 	{ &cg_crosshairSize, "cg_crosshairSize", "24", CVAR_ARCHIVE },
+#endif
 	{ &cg_crosshairHealth, "cg_crosshairHealth", "0", CVAR_ARCHIVE },
 	{ &cg_crosshairX, "cg_crosshairX", "0", CVAR_ARCHIVE },
 	{ &cg_crosshairY, "cg_crosshairY", "0", CVAR_ARCHIVE },
