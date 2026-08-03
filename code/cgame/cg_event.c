@@ -111,6 +111,21 @@ static void CG_Obituary( entityState_t *ent ) {
 	attacker = ent->otherEntityNum2;
 	mod = ent->eventParm;
 
+	/*
+	Hand every kill to the page. The engine's own centre print is generated and
+	drawn correctly here -- verified end to end -- but its 2D text comes out as
+	blank glyphs in this build, while the same font renders fine elsewhere. Since
+	every other piece of chrome is HTML anyway, the page draws the kill feed too:
+	it can be styled to match the site, and it sidesteps the font entirely.
+
+	Client numbers rather than names: the page already resolves those through
+	JKD_GetPlayerInfo, so there is one place that knows how to render a name.
+	*/
+	if ( target >= 0 && target < MAX_CLIENTS ) {
+		trap_SendConsoleCommand( va( "jkd_obituary %i %i %i %i\n",
+			target, attacker, mod, CG_ViewedClientNum() ) );
+	}
+
 	if ( target < 0 || target >= MAX_CLIENTS ) {
 		CG_Error( "CG_Obituary: target out of range" );
 	}
@@ -288,9 +303,17 @@ clientkilled:
 			trap_SP_GetStringTextString("INGAMETEXT_KILLED_MESSAGE", sKilledStr, sizeof(sKilledStr));
 			s = va("%s %s", sKilledStr, targetName );
 		}
+#ifdef __EMSCRIPTEN__
+		// The page prints this one itself, off jkd_obituary above. Leaving the
+		// engine's copy in place would stack a second, unstyled message on top --
+		// and its glyphs come out blank in this build anyway.
+		(void)s;
+		if ( 0 ) {
+#else
 		if (!(cg_singlePlayerActive.integer && cg_cameraOrbit.integer)) {
+#endif
 			CG_CenterPrint( s, cgs.screenHeight * 0.30, BIGCHAR_WIDTH );
-		} 
+		}
 		// print the text message as well
 	}
 
