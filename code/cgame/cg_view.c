@@ -1441,7 +1441,7 @@ static qboolean CG_UpdateDemoFollow( void ) {
 	usercmd_t	cmd;
 	centity_t	*cent;
 	trace_t		trace;
-	vec3_t		cmdAngles, forward, focus, wanted;
+	vec3_t		cmdAngles, forward, focus, wanted, viewAngles;
 	int			i, clientNum, now, elapsed;
 	float		range;
 
@@ -1479,8 +1479,14 @@ static qboolean CG_UpdateDemoFollow( void ) {
 
 	now = trap_Milliseconds();
 	if ( !cg.demoFollowActive ) {
-		// start behind them, facing the way they are
-		VectorCopy( cent->lerpAngles, cg.demoFollowAngles );
+		/*
+		Start directly behind them.
+
+		demoFollowAngles[YAW] is an *offset* from wherever the target is facing
+		rather than a world angle (see where the view angles are built below),
+		so zero means "behind", which is where a chase camera belongs.
+		*/
+		cg.demoFollowAngles[YAW] = 0;
 		cg.demoFollowAngles[PITCH] = 10;
 		cg.demoFollowAngles[ROLL] = 0;
 		VectorCopy( cmdAngles, cg.demoFollowLastCmdAngles );
@@ -1545,7 +1551,22 @@ static qboolean CG_UpdateDemoFollow( void ) {
 		range = 80;
 	}
 
-	AngleVectors( cg.demoFollowAngles, forward, NULL, NULL );
+	/*
+	Ride the target's yaw, exactly as third person does in game.
+
+	The camera used to hold whatever world angle it was left on, so it started
+	behind the player and then stayed put while they turned -- ending up beside
+	or in front of them, which is what made following someone feel unanchored
+	next to the recorded view. Adding the target's yaw makes the mouse an
+	offset around them instead: zero sits behind, and it stays behind through
+	every turn they make. Pitch stays absolute, since the camera's own height
+	should not pitch with the player's aim.
+	*/
+	viewAngles[YAW] = AngleNormalize180( cent->lerpAngles[YAW] + cg.demoFollowAngles[YAW] );
+	viewAngles[PITCH] = cg.demoFollowAngles[PITCH];
+	viewAngles[ROLL] = 0;
+
+	AngleVectors( viewAngles, forward, NULL, NULL );
 	VectorMA( focus, -range, forward, wanted );
 
 	// pull in if the wall is closer than the requested distance, so the camera
@@ -1556,13 +1577,13 @@ static qboolean CG_UpdateDemoFollow( void ) {
 	}
 
 	VectorCopy( wanted, cg.refdef.vieworg );
-	VectorCopy( cg.demoFollowAngles, cg.refdefViewAngles );
+	VectorCopy( viewAngles, cg.refdefViewAngles );
 	AnglesToAxis( cg.refdefViewAngles, cg.refdef.viewaxis );
 
 #ifdef __EMSCRIPTEN__
 	jkdCam.active = 2;
 	VectorCopy( cg.refdef.vieworg, jkdCam.origin );
-	VectorCopy( cg.demoFollowAngles, jkdCam.angles );
+	VectorCopy( viewAngles, jkdCam.angles );
 	jkdCam.followTarget = clientNum;
 	jkdCam.followVisible = cent->currentValid ? 1 : 0;
 #endif
