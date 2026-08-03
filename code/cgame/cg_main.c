@@ -611,7 +611,14 @@ static cvarTable_t cvarTable[] = { // bk001129
 	{ &cg_autoswitch, "cg_autoswitch", "1", CVAR_ARCHIVE },
 	{ &cg_drawGun, "cg_drawGun", "1", CVAR_ARCHIVE },
 	{ &cg_zoomFov, "cg_zoomfov", "40.0", CVAR_ARCHIVE },
+#ifdef __EMSCRIPTEN__
+	// 80 is a first-person combat FOV. Watching is a different activity: you want
+	// to see the fight, not aim in it, and with hor+ on (cg_fovAspectAdjust) this
+	// widens the view rather than stretching it.
+	{ &cg_fov, "cg_fov", "110", CVAR_ARCHIVE },
+#else
 	{ &cg_fov, "cg_fov", "80", CVAR_ARCHIVE },
+#endif
 	{ &cg_viewsize, "cg_viewsize", "100", CVAR_ARCHIVE },
 	{ &cg_stereoSeparation, "cg_stereoSeparation", "0.4", CVAR_ARCHIVE  },
 	{ &cg_shadows, "cg_shadows", "1", CVAR_ARCHIVE  },

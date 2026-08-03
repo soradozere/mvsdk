@@ -1027,8 +1027,20 @@ static int CG_CalcFov( void ) {
 			}
 		}
 
+#ifdef __EMSCRIPTEN__
+		// The remaining zoom paths are the recorded player's scope, and they
+		// drive fov_x from their zoom state -- which is not the view you are
+		// looking through once the camera is on someone else or detached, and
+		// which changes under you whenever the demo's own spectator switches
+		// target. Sam asked for an FOV that holds across the whole demo
+		// regardless of player or camera mode, so this is where that is decided:
+		// cg_fov is the only thing that sets it.
+		if ( 0 )
+		{
+#else
 		if (cg.predictedPlayerState.zoomMode == 2)
 		{ //binoculars
+#endif
 			if (zoomFov > 40.0f)
 			{
 				zoomFov -= cg.frametime * 0.075f;
@@ -1045,10 +1057,17 @@ static int CG_CalcFov( void ) {
 
 			fov_x = zoomFov;
 		}
+#ifdef __EMSCRIPTEN__
+		else if ( 0 )		// disruptor scope: same reasoning as above
+		{
+			if (!cg.predictedPlayerState.zoomLocked)
+			{
+#else
 		else if (cg.predictedPlayerState.zoomMode)
 		{
 			if (!cg.predictedPlayerState.zoomLocked)
 			{
+#endif
 				if (zoomFov > 50)
 				{ //Now starting out at nearly half zoomed in
 					zoomFov = 50;

@@ -77,6 +77,22 @@ qboolean CG_ThereIsAMaster(void);
 
 /*
 =============
+CG_ViewedClientNum
+
+Whoever the viewer is currently watching, which is not always whoever the demo
+was recorded from. Kill messages read "You killed X" off this, so watching
+another player's POV shows their kills rather than the recorder's.
+=============
+*/
+static int CG_ViewedClientNum( void ) {
+	if ( cg_demoFollow.integer >= 0 && cg_demoFollow.integer < MAX_CLIENTS ) {
+		return cg_demoFollow.integer;
+	}
+	return cg.snap->ps.clientNum;
+}
+
+/*
+=============
 CG_Obituary
 =============
 */
@@ -224,7 +240,7 @@ static void CG_Obituary( entityState_t *ent ) {
 clientkilled:
 
 	// check for kill messages from the current clientNum
-	if ( attacker == cg.snap->ps.clientNum ) {
+	if ( attacker == CG_ViewedClientNum() ) {
 		char	*s;
 
 		if ( cgs.gametype < GT_TEAM && cgs.gametype != GT_TOURNAMENT ) {
@@ -286,7 +302,7 @@ clientkilled:
 		Q_strncpyz( attackerName, Info_ValueForKey( attackerInfo, "n" ), sizeof(attackerName) - 2);
 		strcat( attackerName, S_COLOR_WHITE );
 		// check for kill messages about the current clientNum
-		if ( target == cg.snap->ps.clientNum ) {
+		if ( target == CG_ViewedClientNum() ) {
 			Q_strncpyz( cg.killerName, attackerName, sizeof( cg.killerName ) );
 		}
 	}
