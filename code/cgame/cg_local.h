@@ -1531,6 +1531,7 @@ extern	vmCvar_t		cg_fovAspectAdjust;
 extern	vmCvar_t		cg_demoCam;
 extern	vmCvar_t		cg_demoCamSpeed;
 extern	vmCvar_t		cg_demoFollow;
+extern	vmCvar_t		cg_demoFollowEyes;
 
 extern	vmCvar_t		cg_thirdPerson;
 extern	vmCvar_t		cg_thirdPersonRange;

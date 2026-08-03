@@ -6130,7 +6130,7 @@ void CG_Player( centity_t *cent ) {
 	// Watching someone else from inside their eyes: hide their model, the same
 	// way the engine hides your own in first person. Without this the view
 	// starts inside their head, looking at the model from the wrong side.
-	if ( cg_demoFollow.integer >= 0 && !cg_thirdPerson.integer &&
+	if ( cg_demoFollow.integer >= 0 && cg_demoFollowEyes.integer &&
 		cent->currentState.number == cg_demoFollow.integer ) {
 		renderfx = RF_THIRD_PERSON;			// only show in mirrors
 	}

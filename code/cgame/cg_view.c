@@ -1420,13 +1420,14 @@ CG_UpdateDemoFollow
 
 Watch a player other than the one the demo recorded.
 
-Both a real first-person view and a chase camera, chosen by cg_thirdPerson.
+A chase camera, as it is in game. cg_demoFollowEyes swaps it for the player's
+own recorded view, but that is off by default -- a demo reads better from behind
+the player than from inside their head.
 
-First person is genuine, not reconstructed: PlayerStateToEntityState copies the
-whole of ps->viewangles -- pitch included -- into s.apos, so every player's look
-direction is in the demo, and lerpAngles is that trajectory evaluated for the
-current frame. Only eye height is approximate, since viewheight isn't
-transmitted and a crouching player is watched from standing height.
+The first-person path is genuine rather than reconstructed:
+PlayerStateToEntityState copies the whole of ps->viewangles -- pitch included --
+into s.apos, so every player's look direction is in the demo, and lerpAngles is
+that trajectory evaluated for the current frame.
 
 The target's position comes from cg_entities[] rather than the snapshot entity
 list, so it benefits from the same interpolation the renderer uses and doesn't
@@ -1512,19 +1513,17 @@ static qboolean CG_UpdateDemoFollow( void ) {
 	focus[2] += DEFAULT_VIEWHEIGHT;
 
 	/*
-	First person: sit in the target's eyes and look where they were looking.
+	Optional: sit in the target's eyes and look where they were looking.
 
-	This is genuinely their view, not an approximation of it.
-	PlayerStateToEntityState copies the whole of ps->viewangles -- pitch
-	included -- into s.apos, so every player's look direction travels in the
-	demo, and cent->lerpAngles is that trajectory evaluated for this frame.
-	Only the eye height is approximate: viewheight isn't transmitted, so a
-	crouching player is watched from standing height.
-
-	Chase is still there on cg_thirdPerson, which is what the viewer's
-	Follow/Chase buttons already drive.
+	Off by default -- watching another player is meant to be third person, the
+	way it is in game. Kept because it is genuinely their view rather than an
+	approximation: PlayerStateToEntityState copies the whole of ps->viewangles,
+	pitch included, into s.apos, so every player's look direction travels in the
+	demo and lerpAngles is that trajectory evaluated for this frame. Eye height
+	is the one approximation, since viewheight isn't transmitted and a crouching
+	player is watched from standing.
 	*/
-	if ( !cg_thirdPerson.integer ) {
+	if ( cg_demoFollowEyes.integer ) {
 		VectorCopy( focus, cg.refdef.vieworg );
 		VectorCopy( cent->lerpAngles, cg.refdefViewAngles );
 		cg.refdefViewAngles[ROLL] = 0;
