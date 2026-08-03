@@ -2455,6 +2455,33 @@ for a few moments
 void CG_CenterPrint( const char *str, int y, int charWidth ) {
 	char	*s;
 
+#ifdef __EMSCRIPTEN__
+	/*
+	Hand it to the page instead of drawing it.
+
+	Centre prints carry the things a viewer actually wants -- who took the flag,
+	who scored -- but the engine's 2D text rasterises as blank glyph boxes in
+	this build, so on screen they are a dark bar with a few white squares in it.
+	Forwarding from here rather than from each call site catches every one,
+	including the server's own `cp` command, which in CTF fires constantly.
+
+	Quotes would break the command tokeniser, and these strings come from the
+	server, so they are dropped rather than trusted.
+	*/
+	{
+		char safe[1024];
+		int i, j = 0;
+		for ( i = 0; str[i] && j < (int)sizeof( safe ) - 1; i++ ) {
+			if ( str[i] != '"' ) {
+				safe[j++] = str[i];
+			}
+		}
+		safe[j] = '\0';
+		trap_SendConsoleCommand( va( "jkd_centerprint \"%s\"\n", safe ) );
+	}
+	return;
+#endif
+
 	Q_strncpyz( cg.centerPrint, str, sizeof(cg.centerPrint) );
 
 	cg.centerPrintTime = cg.time;
