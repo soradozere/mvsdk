@@ -996,6 +996,19 @@ static int CG_CalcFov( void ) {
 		cgFov = 160;
 	}
 
+#ifdef __EMSCRIPTEN__
+	// Both overrides below are skipped for the viewer, because both make the
+	// chosen FOV snap back to 80 partway through a demo for reasons that only
+	// make sense while playing. Intermission is the break between rounds or
+	// halves -- watching one is not the same as sitting in one. DF_FIXED_FOV is
+	// a server rule stopping players widening their own view for an advantage,
+	// which nobody watching a recording can gain.
+	//
+	// Two bare blocks, so the shared code below stays at the nesting the closing
+	// braces expect -- it is the two branches that go, not the structure.
+	{
+		{
+#else
 	if ( cg.predictedPlayerState.pm_type == PM_INTERMISSION ) {
 		// if in intermission, use a fixed value
 		fov_x = 80;//90;
@@ -1005,6 +1018,7 @@ static int CG_CalcFov( void ) {
 			// dmflag to prevent wide fov for all clients
 			fov_x = 80;//90;
 		} else {
+#endif
 			fov_x = cgFov;
 			if ( fov_x < 1 ) {
 				fov_x = 1;
@@ -1063,19 +1077,28 @@ static int CG_CalcFov( void ) {
 
 			fov_x = zoomFov;
 		}
-		else 
+		else
 		{
 			zoomFov = 80;
 
+#ifdef __EMSCRIPTEN__
+			// Skipped for the viewer. This eases the FOV back out after a scope,
+			// interpolating from the *recorded* player's zoomFov -- which is the
+			// wrong state to read when the camera is on someone else or detached
+			// entirely, and which restarts every time the demo's own spectator
+			// switches target. The visible effect is the viewer's chosen FOV
+			// springing back on its own, so cg_fov simply stands.
+#else
 			f = ( cg.time - cg.predictedPlayerState.zoomTime ) / ZOOM_OUT_TIME;
-			if ( f > 1.0 ) 
+			if ( f > 1.0 )
 			{
 				// fov_x = fov_x;
-			} 
-			else 
+			}
+			else
 			{
 				fov_x = cg.predictedPlayerState.zoomFov + f * ( fov_x - cg.predictedPlayerState.zoomFov );
 			}
+#endif
 		}
 	}
 
