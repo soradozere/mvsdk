@@ -1562,8 +1562,20 @@ static qboolean CG_UpdateDemoFollow( void ) {
 	every turn they make. Pitch stays absolute, since the camera's own height
 	should not pitch with the player's aim.
 	*/
-	viewAngles[YAW] = AngleNormalize180( cent->lerpAngles[YAW] + cg.demoFollowAngles[YAW] );
-	viewAngles[PITCH] = cg.demoFollowAngles[PITCH];
+	/*
+	cg_thirdPersonAngle and cg_thirdPersonPitchOffset ride on top, as a second
+	and deliberate way to place the camera.
+
+	The orbit above is driven by mouse deltas, which a viewer watching rather
+	than playing never feeds the engine -- so without this, every camera
+	placement control a page offers (sliders, arrow keys, a reset) works on the
+	recorded view, which goes down the ordinary third-person path, and does
+	nothing whatsoever on anybody else. Added rather than assigned, so the two
+	ways of aiming the camera compose instead of one clobbering the other.
+	*/
+	viewAngles[YAW] = AngleNormalize180( cent->lerpAngles[YAW] + cg.demoFollowAngles[YAW]
+		+ cg_thirdPersonAngle.value );
+	viewAngles[PITCH] = cg.demoFollowAngles[PITCH] + cg_thirdPersonPitchOffset.value;
 	viewAngles[ROLL] = 0;
 
 	AngleVectors( viewAngles, forward, NULL, NULL );

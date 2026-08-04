@@ -91,6 +91,37 @@ static int CG_ViewedClientNum( void ) {
 	return cg.snap->ps.clientNum;
 }
 
+#ifdef __EMSCRIPTEN__
+/*
+Send one line to the page's kill feed.
+
+Called from the obituary and CTF-message printers only. That is the whole
+design: the game prints kills, flag events and chat into the same console, and
+only the first two belong in a feed, so picking the call sites keeps chat out
+structurally rather than by filtering text that could always be phrased to slip
+through. Quotes are dropped because they would end the command's argument early
+-- player names reach here and can contain anything.
+*/
+static void CG_WasmFeed( const char *text ) {
+	char safe[1024];
+	int i, j = 0;
+
+	if ( !text || !text[0] ) {
+		return;
+	}
+	for ( i = 0; text[i] && j < (int)sizeof( safe ) - 1; i++ ) {
+		if ( text[i] != '"' && text[i] != '\n' ) {
+			safe[j++] = text[i];
+		}
+	}
+	safe[j] = '\0';
+	if ( !safe[0] ) {
+		return;
+	}
+	trap_SendConsoleCommand( va( "jkd_feed \"%s\"\n", safe ) );
+}
+#endif
+
 /*
 =============
 CG_Obituary
@@ -249,6 +280,9 @@ static void CG_Obituary( entityState_t *ent ) {
 		message = (char *)CG_GetStripEdString("INGAMETEXT", message);
 
 		CG_Printf( "%s %s\n", targetName, message);
+#ifdef __EMSCRIPTEN__
+		CG_WasmFeed( va( "%s %s", targetName, message ) );
+#endif
 		return;
 	}
 
@@ -422,14 +456,20 @@ clientkilled:
 		if (message) {
 			message = (char *)CG_GetStripEdString("INGAMETEXT", message);
 
-			CG_Printf( "%s %s %s\n", 
+			CG_Printf( "%s %s %s\n",
 				targetName, message, attackerName);
+#ifdef __EMSCRIPTEN__
+			CG_WasmFeed( va( "%s %s %s", targetName, message, attackerName ) );
+#endif
 			return;
 		}
 	}
 
 	// we don't know what it was
 	CG_Printf( "%s %s\n", targetName, (char *)CG_GetStripEdString("INGAMETEXT", "DIED_GENERIC") );
+#ifdef __EMSCRIPTEN__
+	CG_WasmFeed( va( "%s %s", targetName, (char *)CG_GetStripEdString("INGAMETEXT", "DIED_GENERIC") ) );
+#endif
 }
 
 //==========================================================================
@@ -899,6 +939,11 @@ void CG_PrintCTFMessage(clientInfo_t *ci, const char *teamName, int ctfMessage)
 
 doPrint:
 	Com_Printf("%s\n", printMsg);
+#ifdef __EMSCRIPTEN__
+	// Who took, returned or capped the flag -- the half of the feed that is not
+	// kills, and the reason a CTF viewer watches it at all.
+	CG_WasmFeed( printMsg );
+#endif
 }
 
 void CG_GetCTFMessageEvent(entityState_t *es)
