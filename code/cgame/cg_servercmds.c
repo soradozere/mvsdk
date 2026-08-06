@@ -1256,7 +1256,7 @@ static void CG_ServerCommand( void ) {
 	}
 
 	if ( !strcmp( cmd, "chat" ) ) {
-		if ( !cg_teamChatsOnly.integer ) {
+		if ( !cg_teamChatsOnly.integer && cg_drawChat.integer ) {
 			trap_S_StartLocalSound( cgs.media.talkSound, CHAN_LOCAL_SOUND );
 			Q_strncpyz( text, CG_Argv(1), MAX_SAY_TEXT );
 			CG_RemoveChatEscapeChar( text );
@@ -1266,11 +1266,21 @@ static void CG_ServerCommand( void ) {
 	}
 
 	if ( !strcmp( cmd, "tchat" ) ) {
-		trap_S_StartLocalSound( cgs.media.talkSound, CHAN_LOCAL_SOUND );
+		/*
+		The team chat box is left alone deliberately: it is drawn separately
+		from the notify area, so cg_draw2D already governs whether it appears.
+		Only the console print and the beep are suppressed here, which is what
+		puts team chat in the notify area alongside the kill feed.
+		*/
+		if ( cg_drawChat.integer ) {
+			trap_S_StartLocalSound( cgs.media.talkSound, CHAN_LOCAL_SOUND );
+		}
 		Q_strncpyz( text, CG_Argv(1), MAX_SAY_TEXT );
 		CG_RemoveChatEscapeChar( text );
 		CG_AddToTeamChat( text );
-		CG_Printf( "%s\n", text );
+		if ( cg_drawChat.integer ) {
+			CG_Printf( "%s\n", text );
+		}
 		return;
 	}
 	if ( !strcmp( cmd, "vchat" ) ) {

@@ -552,6 +552,7 @@ vmCvar_t	cg_drawTeamOverlay;
 vmCvar_t	cg_teamOverlayUserinfo;
 vmCvar_t	cg_drawFriend;
 vmCvar_t	cg_teamChatsOnly;
+vmCvar_t	cg_drawChat;
 vmCvar_t	cg_noVoiceChats;
 vmCvar_t	cg_noVoiceText;
 vmCvar_t	cg_hudFiles;
@@ -743,6 +744,20 @@ static cvarTable_t cvarTable[] = { // bk001129
 	{ &cg_stats, "cg_stats", "0", 0 },
 	{ &cg_drawFriend, "cg_drawFriend", "1", CVAR_ARCHIVE },
 	{ &cg_teamChatsOnly, "cg_teamChatsOnly", "0", CVAR_ARCHIVE },
+	/*
+	Whether player chat reaches the console, and so the notify area.
+
+	Defaults on, which is the behaviour everything already had. It exists for
+	offline rendering: kills and flag events share the notify area with chat,
+	and a published video wants the kill feed without the conversation. There
+	is no way to express that with con_notifytime alone, which is all or
+	nothing.
+
+	Gating the print sites rather than filtering the text follows what
+	CG_WasmFeed already does for the page's feed -- chat is kept out
+	structurally, not by matching strings a player could phrase around.
+	*/
+	{ &cg_drawChat, "cg_drawChat", "1", CVAR_ARCHIVE },
 	{ &cg_noVoiceChats, "cg_noVoiceChats", "0", CVAR_ARCHIVE },
 	{ &cg_noVoiceText, "cg_noVoiceText", "0", CVAR_ARCHIVE },
 	// the following variables are created in other parts of the system,
