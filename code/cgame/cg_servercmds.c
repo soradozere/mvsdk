@@ -1332,7 +1332,18 @@ static void CG_ServerCommand( void ) {
 		return;
 	}
 
-	CG_Printf( "Unknown client game command: %s\n", cmd );
+	/*
+	A diagnostic, not something a player needs to read.
+	
+	It lands in the notify area alongside the kill feed, which is fine on a
+	live screen and not fine burnt into a published video -- a demo recorded
+	against a modded server prints one of these for every command the client
+	does not recognise. Behind developer, so it is still there when debugging
+	a demo that will not play.
+	*/
+	if ( cg_developer.integer ) {
+		CG_Printf( "Unknown client game command: %s\n", cmd );
+	}
 }
 
 
