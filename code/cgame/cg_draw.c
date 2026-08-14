@@ -2479,14 +2479,33 @@ void CG_CenterPrint( const char *str, int y, int charWidth ) {
 
 	Quotes would break the command tokeniser, and these strings come from the
 	server, so they are dropped rather than trusted.
+
+	Newlines are worse than quotes and the first version of this only stripped
+	quotes. Cbuf splits on a newline even inside a quoted argument, so a
+	multi-line centre print became several console commands: line one was the
+	jkd_centerprint, and every later line ran as whatever command its first
+	word happened to be. NWH's welcome message ("Welcome X\nUID: [...]") was
+	the first multi-line cp this code ever met -- its UID line executed,
+	wasn't a known command, and the console's standard behaviour forwarded it
+	to the server as a reliable command. JK2's netchan XORs every server
+	message with the text of the client's acked reliable command, so those
+	accidental commands desynced the cipher and every message after the next
+	ack decoded to garbage: CL_ParsePacketEntities "end of message", ~1s
+	after connecting, only on NWH. Newlines become spaces; the page gets one
+	line, which beats getting owned by a welcome banner.
 	*/
 	{
 		char safe[1024];
 		int i, j = 0;
 		for ( i = 0; str[i] && j < (int)sizeof( safe ) - 1; i++ ) {
-			if ( str[i] != '"' ) {
-				safe[j++] = str[i];
+			if ( str[i] == '"' ) {
+				continue;
 			}
+			if ( str[i] == '\n' || str[i] == '\r' ) {
+				safe[j++] = ' ';
+				continue;
+			}
+			safe[j++] = str[i];
 		}
 		safe[j] = '\0';
 		trap_SendConsoleCommand( va( "jkd_centerprint \"%s\"\n", safe ) );

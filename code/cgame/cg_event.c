@@ -110,7 +110,7 @@ static void CG_WasmFeed( const char *text ) {
 		return;
 	}
 	for ( i = 0; text[i] && j < (int)sizeof( safe ) - 1; i++ ) {
-		if ( text[i] != '"' && text[i] != '\n' ) {
+		if ( text[i] != '"' && text[i] != '\n' && text[i] != '\r' ) {
 			safe[j++] = text[i];
 		}
 	}
