@@ -3860,6 +3860,74 @@ float cgYsalFadeVal = 0;
 CG_Draw2D
 =================
 */
+/*
+===============================================================================
+Chat box
+
+Chat drawn by the game, in the game's font, where Eternal puts it: low on the
+picture, clear of the health gauge and the flag indicator. Exists because the
+notify echo mixes chat into the kill feed at the top of the screen, and an
+HTML overlay -- the first attempt -- cannot render JK2 colour codes the way
+the engine itself does.
+
+The buffer only ever fills from the chat/tchat server commands, which demo
+playback never produces, so this draws nothing in the demo viewer without
+needing a gate. cg_chatBoxY is archived so the height can be tuned from the
+console without a rebuild.
+===============================================================================
+*/
+#define CHATBOX_LINES		5
+#define CHATBOX_TIME_MS		10000
+#define CHATBOX_LINE_H		16
+
+typedef struct {
+	char	text[MAX_SAY_TEXT];
+	int		time;
+} chatBoxLine_t;
+
+static chatBoxLine_t	cg_chatBoxLines[CHATBOX_LINES];
+static int				cg_chatBoxHead = 0;
+
+void CG_ChatBoxAdd( const char *text ) {
+	chatBoxLine_t *line = &cg_chatBoxLines[cg_chatBoxHead % CHATBOX_LINES];
+
+	Q_strncpyz( line->text, text, sizeof( line->text ) );
+	line->time = cg.time;
+	cg_chatBoxHead++;
+}
+
+void CG_DrawChatBox( void ) {
+	int		live[CHATBOX_LINES];
+	int		i, idx, count = 0;
+	float	y;
+
+	for ( i = 0; i < CHATBOX_LINES; i++ ) {
+		idx = cg_chatBoxHead - CHATBOX_LINES + i;
+		if ( idx < 0 ) {
+			continue;
+		}
+		idx %= CHATBOX_LINES;
+		// cg.time can step backwards across a map change; treat a line from
+		// the future as expired rather than pinning it on screen forever.
+		if ( cg.time < cg_chatBoxLines[idx].time
+			|| cg.time - cg_chatBoxLines[idx].time > CHATBOX_TIME_MS ) {
+			continue;
+		}
+		live[count++] = idx;
+	}
+	if ( !count ) {
+		return;
+	}
+
+	// The newest line sits at cg_chatBoxY and history stacks upward, so the
+	// box grows away from the HUD rather than into it.
+	y = cg_chatBoxY.value - (count - 1) * CHATBOX_LINE_H;
+	for ( i = 0; i < count; i++, y += CHATBOX_LINE_H ) {
+		CG_Text_Paint( 10, y, 0.9f, colorWhite, cg_chatBoxLines[live[i]].text,
+			0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_SMALL );
+	}
+}
+
 static void CG_Draw2D( void ) {
 	float			inTime = cg.invenSelectTime+WEAPON_SELECT_TIME;
 	float			wpTime = cg.weaponSelectTime+WEAPON_SELECT_TIME;
@@ -4429,6 +4497,7 @@ static void CG_Draw2D( void ) {
 	cg.scoreBoardShowing = CG_DrawScoreboard();
 	if ( !cg.scoreBoardShowing) {
 		CG_DrawCenterString();
+		CG_DrawChatBox();
 	}
 }
 

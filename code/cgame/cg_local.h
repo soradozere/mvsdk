@@ -1565,6 +1565,7 @@ extern	vmCvar_t		cg_noVoiceText;
 extern  vmCvar_t		cg_scorePlum;
 extern	vmCvar_t		cg_hudFiles;
 extern	vmCvar_t		cg_smoothClients;
+extern	vmCvar_t		cg_chatBoxY;
 extern	vmCvar_t		cg_pmove_fixed;
 extern	vmCvar_t		cg_pmove_msec;
 extern	vmCvar_t		cg_cameraOrbit;
@@ -1680,6 +1681,8 @@ void CG_DrawString( float x, float y, const char *string,
 
 void CG_DrawNumField (int x, int y, int width, int value,int charWidth,int charHeight,int style,qboolean zeroFill);
 
+void CG_ChatBoxAdd( const char *text );
+void CG_DrawChatBox( void );
 void CG_DrawStringExt( int x, int y, const char *string, const float *setColor, 
 		qboolean forceColor, qboolean shadow, int charWidth, int charHeight, int maxChars );
 void CG_DrawBigString( int x, int y, const char *s, float alpha );

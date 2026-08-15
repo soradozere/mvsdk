@@ -1313,6 +1313,7 @@ static void CG_ServerCommand( void ) {
 			CG_Printf( "%s\n", text );
 #ifdef __EMSCRIPTEN__
 			CG_WasmChat( text );
+			CG_ChatBoxAdd( text );
 #endif
 		}
 		return;
@@ -1336,6 +1337,7 @@ static void CG_ServerCommand( void ) {
 		}
 #ifdef __EMSCRIPTEN__
 		CG_WasmChat( text );
+		CG_ChatBoxAdd( text );
 #endif
 		return;
 	}
