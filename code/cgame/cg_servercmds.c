@@ -1128,6 +1128,56 @@ void CG_CheckSVStripEdRef(char *buf, const char *str)
 	buf[b] = 0;
 }
 
+#ifdef __EMSCRIPTEN__
+/*
+=================
+CG_WasmChat
+
+Hand one chat line to the page, which draws it.
+
+The engine's 2D text rasterises as blank glyph boxes in this build, so chat
+was arriving and being drawn invisibly -- you could type and be heard, but
+never see anyone reply. Same treatment the kill feed and centre prints
+already get.
+
+Fed from the chat call sites rather than by tapping the console, so what
+reaches the page is chat and only chat.
+
+Demo playback never gets here: the engine drops chat commands before cgame
+sees them (cl_demoSuppressChat in CL_GetServerCommand), so the demo viewer's
+deliberate no-chat policy is unaffected by this.
+
+Quotes AND newlines are stripped, not escaped. A newline would end the console
+command and run the remainder as another one -- which is precisely how a
+multi-line centre print once forwarded a stray command back to the server and
+desynced the netchan cipher. Player names reach here and can contain anything.
+=================
+*/
+static void CG_WasmChat( const char *text ) {
+	char safe[MAX_SAY_TEXT];
+	int i, j = 0;
+
+	if ( !text || !text[0] ) {
+		return;
+	}
+	for ( i = 0; text[i] && j < (int)sizeof( safe ) - 1; i++ ) {
+		if ( text[i] == '"' ) {
+			continue;
+		}
+		if ( text[i] == '\n' || text[i] == '\r' ) {
+			safe[j++] = ' ';
+			continue;
+		}
+		safe[j++] = text[i];
+	}
+	safe[j] = '\0';
+	if ( !safe[0] ) {
+		return;
+	}
+	trap_SendConsoleCommand( va( "jkd_chat \"%s\"\n", safe ) );
+}
+#endif
+
 /*
 =================
 CG_ServerCommand
@@ -1261,6 +1311,9 @@ static void CG_ServerCommand( void ) {
 			Q_strncpyz( text, CG_Argv(1), MAX_SAY_TEXT );
 			CG_RemoveChatEscapeChar( text );
 			CG_Printf( "%s\n", text );
+#ifdef __EMSCRIPTEN__
+			CG_WasmChat( text );
+#endif
 		}
 		return;
 	}
@@ -1281,6 +1334,9 @@ static void CG_ServerCommand( void ) {
 		if ( cg_drawChat.integer ) {
 			CG_Printf( "%s\n", text );
 		}
+#ifdef __EMSCRIPTEN__
+		CG_WasmChat( text );
+#endif
 		return;
 	}
 	if ( !strcmp( cmd, "vchat" ) ) {

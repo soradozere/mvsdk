@@ -2669,6 +2669,19 @@ Ghoul2 Insert End
 	
 	// load a few needed things before we do any screen updates
 	cgs.media.charsetShader		= trap_R_RegisterShaderNoMip( "gfx/2d/charsgrid_med" );
+#ifdef __EMSCRIPTEN__
+	// The bitmap charset behind every console line, chat message and centre
+	// print. It renders wrongly in this build while the scoreboard's
+	// font-system text is fine.
+	//
+	// Note a nonzero handle proves very little: R_FindShader returns a live
+	// handle pointing at the *default* shader when the image is missing, so
+	// this cannot distinguish "loaded" from "silently substituted". The
+	// IMAGE LOAD FAILED print in R_FindImageFileNew is the real tell. Measured
+	// 15 Aug 2026: handle=5 with no load failure, i.e. the texture is fine and
+	// the fault is further down the draw. See PROGRESS.md.
+	CG_Printf( "[JKD] charsetShader handle=%d\n", cgs.media.charsetShader );
+#endif
 	cgs.media.whiteShader		= trap_R_RegisterShader( "white" );
 
 	cgs.media.loadBarLED		= trap_R_RegisterShaderNoMip( "gfx/hud/load_tick" );
