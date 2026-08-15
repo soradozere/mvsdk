@@ -558,7 +558,10 @@ vmCvar_t	cg_noVoiceText;
 vmCvar_t	cg_hudFiles;
 vmCvar_t 	cg_scorePlum;
 vmCvar_t 	cg_smoothClients;
-vmCvar_t 	cg_chatBoxY;
+vmCvar_t 	cg_chatBox;
+vmCvar_t 	cg_chatBoxX;
+vmCvar_t 	cg_chatBoxHeight;
+vmCvar_t 	cg_chatBoxFontSize;
 vmCvar_t	cg_pmove_fixed;
 vmCvar_t	cg_pmove_msec;
 vmCvar_t	cg_cameraMode;
@@ -787,7 +790,13 @@ static cvarTable_t cvarTable[] = { // bk001129
 	{ &cg_scorePlum, "cg_scorePlums", "1", CVAR_USERINFO | CVAR_ARCHIVE},
 	{ &cg_hudFiles, "cg_hudFiles", "0", CVAR_USERINFO | CVAR_ARCHIVE},
 	{ &cg_smoothClients, "cg_smoothClients", "0", CVAR_USERINFO | CVAR_ARCHIVE},
-	{ &cg_chatBoxY, "cg_chatBoxY", "290", CVAR_ARCHIVE },
+	// TomArrow's cvar names, deliberately: his fork's chatbox is the one the
+	// community already knows how to tune, so its knowledge transfers here.
+	// cg_chatBox is the dwell time in ms; 0 disables the box entirely.
+	{ &cg_chatBox, "cg_chatBox", "10000", CVAR_ARCHIVE },
+	{ &cg_chatBoxX, "cg_chatBoxX", "10", CVAR_ARCHIVE },
+	{ &cg_chatBoxHeight, "cg_chatBoxHeight", "290", CVAR_ARCHIVE },
+	{ &cg_chatBoxFontSize, "cg_chatBoxFontSize", "0.9", CVAR_ARCHIVE },
 	{ &cg_cameraMode, "com_cameraMode", "0", CVAR_CHEAT},
 
 	{ &cg_pmove_fixed, "pmove_fixed", "0", 0},

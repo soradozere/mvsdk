@@ -3877,7 +3877,6 @@ console without a rebuild.
 ===============================================================================
 */
 #define CHATBOX_LINES		5
-#define CHATBOX_TIME_MS		10000
 #define CHATBOX_LINE_H		16
 
 typedef struct {
@@ -3901,6 +3900,9 @@ void CG_DrawChatBox( void ) {
 	int		i, idx, count = 0;
 	float	y;
 
+	if ( cg_chatBox.integer <= 0 ) {
+		return;
+	}
 	for ( i = 0; i < CHATBOX_LINES; i++ ) {
 		idx = cg_chatBoxHead - CHATBOX_LINES + i;
 		if ( idx < 0 ) {
@@ -3910,7 +3912,7 @@ void CG_DrawChatBox( void ) {
 		// cg.time can step backwards across a map change; treat a line from
 		// the future as expired rather than pinning it on screen forever.
 		if ( cg.time < cg_chatBoxLines[idx].time
-			|| cg.time - cg_chatBoxLines[idx].time > CHATBOX_TIME_MS ) {
+			|| cg.time - cg_chatBoxLines[idx].time > cg_chatBox.integer ) {
 			continue;
 		}
 		live[count++] = idx;
@@ -3919,12 +3921,12 @@ void CG_DrawChatBox( void ) {
 		return;
 	}
 
-	// The newest line sits at cg_chatBoxY and history stacks upward, so the
-	// box grows away from the HUD rather than into it.
-	y = cg_chatBoxY.value - (count - 1) * CHATBOX_LINE_H;
+	// The newest line sits at cg_chatBoxHeight and history stacks upward, so
+	// the box grows away from the HUD rather than into it.
+	y = cg_chatBoxHeight.value - (count - 1) * CHATBOX_LINE_H;
 	for ( i = 0; i < count; i++, y += CHATBOX_LINE_H ) {
-		CG_Text_Paint( 10, y, 0.9f, colorWhite, cg_chatBoxLines[live[i]].text,
-			0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_SMALL );
+		CG_Text_Paint( cg_chatBoxX.value, y, cg_chatBoxFontSize.value, colorWhite,
+			cg_chatBoxLines[live[i]].text, 0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_SMALL );
 	}
 }
 

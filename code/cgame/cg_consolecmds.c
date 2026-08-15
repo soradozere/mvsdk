@@ -542,6 +542,11 @@ void CG_InitConsoleCommands( void ) {
 	trap_AddCommand ("notarget");
 	trap_AddCommand ("noclip");
 	trap_AddCommand ("team");
+	// NWH server commands, registered for tab-completion only -- the commands
+	// themselves live server-side and reach it through the ordinary forward
+	// path. Same registrations TomArrow's client ships.
+	trap_AddCommand ("specs");
+	trap_AddCommand ("clientlist");
 	trap_AddCommand ("follow");
 	trap_AddCommand ("levelshot");
 	trap_AddCommand ("addbot");
