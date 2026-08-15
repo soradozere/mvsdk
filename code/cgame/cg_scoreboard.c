@@ -12,7 +12,11 @@
 // Where the status bar starts, so we don't overwrite it
 #define SB_STATUSBAR		420
 
-#define SB_NORMAL_HEIGHT	25
+// Row height. Trimmed from the stock 25 because the scoreboard is read over a
+// live game -- it should cover as little of the match as it can get away with.
+// Shorter rows also raise SB_MAXCLIENTS_NORMAL below, so more of a full server
+// fits before anything is truncated.
+#define SB_NORMAL_HEIGHT	20
 #define SB_INTER_HEIGHT		15 // interleaved height
 
 #define SB_MAXCLIENTS_NORMAL  ((SB_STATUSBAR - SB_TOP) / SB_NORMAL_HEIGHT)
@@ -30,14 +34,48 @@
 #define SB_BOTICON_X		(SCOREBOARD_X+32)
 #define SB_HEAD_X			(SCOREBOARD_X+64)
 
-#define SB_SCORELINE_X		(SCOREBOARD_X+100)
+// Inset from the 640-wide scoreboard box. Every column below is a fraction of
+// SB_SCORELINE_WIDTH, so this one number sets the whole line's width.
+//
+// Narrowed to 140 once and that was wrong: six columns need room, and Ping ran
+// into Time so "124" and "57" read as "12457". Now wider than the stock 100,
+// because the CTF columns are two more than this layout was drawn for.
+#define SB_SCORELINE_X		(SCOREBOARD_X+64)
 #define SB_SCORELINE_WIDTH	(cgs.screenWidth - SB_SCORELINE_X * 2)
 
 #define SB_RATING_WIDTH	    0 // (6 * BIGCHAR_WIDTH)
 #define SB_NAME_X			(SB_SCORELINE_X)
-#define SB_SCORE_X			(SB_SCORELINE_X + .55 * SB_SCORELINE_WIDTH)
-#define SB_PING_X			(SB_SCORELINE_X + .70 * SB_SCORELINE_WIDTH)
-#define SB_TIME_X			(SB_SCORELINE_X + .85 * SB_SCORELINE_WIDTH)
+#define SB_SCORE_X			(SB_SCORELINE_X + .44 * SB_SCORELINE_WIDTH)
+// Capture-the-flag columns: the three numbers a competitive CTF player
+// actually reads. The data was always arriving -- CG_ParseScores has read
+// these fields for years -- it was simply never drawn.
+//
+// The mapping is lifted from TomArrow's fork, which is the only place it is
+// written down. Worth repeating his own caveat about the middle one: he
+// labels impressiveCount as returns with "i think this is ret frags? but
+// idk". It matches what NWH's scoreboard shows, so it is right in practice,
+// but nobody has traced it back to where the server sets it.
+// The gap after Score is wide on purpose: "Score" is drawn at FONT_MEDIUM and
+// is much wider than the number under it, so a column placed by eye off the
+// numbers alone collides with the header. First attempt read "ScoreCap".
+#define SB_CAPS_X			(SB_SCORELINE_X + .58 * SB_SCORELINE_WIDTH)
+#define SB_RET_X			(SB_SCORELINE_X + .66 * SB_SCORELINE_WIDTH)
+#define SB_DEF_X			(SB_SCORELINE_X + .74 * SB_SCORELINE_WIDTH)
+// Ping needs room for three digits plus a gap before Time, which is what the
+// previous spacing did not leave.
+#define SB_PING_X			(SB_SCORELINE_X + .83 * SB_SCORELINE_WIDTH)
+#define SB_TIME_X			(SB_SCORELINE_X + .93 * SB_SCORELINE_WIDTH)
+
+// Numbers are drawn smaller than the headers above them. Six numeric columns
+// is two more than this layout was designed for, and the digits are what
+// actually crowd -- a three-digit ping next to a two-digit time is the widest
+// thing on the line. Shrinking these buys room without touching the names,
+// which have to stay readable.
+#define SB_NUMBER_SCALE		0.85f
+
+// Only in CTF. In duel and FFA these fields carry nothing meaningful, and
+// three empty columns would be worse than none.
+#define SB_SHOW_CTF_COLUMNS	(cgs.gametype == GT_CTF || cgs.gametype == GT_CTY)
 
 // The new and improved score board
 //
@@ -158,16 +196,34 @@ static void CG_DrawClientScore( int y, score_t *score, float *color, float fade,
 	{
 		if (cgs.gametype == GT_TOURNAMENT)
 		{
-			CG_Text_Paint (SB_SCORE_X, y, 1.0f * scale, colorWhite, va("%i/%i", ci->wins, ci->losses),0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_SMALL );
+			CG_Text_Paint (SB_SCORE_X, y, SB_NUMBER_SCALE * scale, colorWhite,va("%i/%i", ci->wins, ci->losses),0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_SMALL );
 		}
 		else
 		{
-			CG_Text_Paint (SB_SCORE_X, y, 1.0f * scale, colorWhite, va("%i", score->score),0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_SMALL );
+			CG_Text_Paint (SB_SCORE_X, y, SB_NUMBER_SCALE * scale, colorWhite,va("%i", score->score),0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_SMALL );
 		}
 	}
 
-	CG_Text_Paint (SB_PING_X, y, 1.0f * scale, colorWhite, va("%i", score->ping),0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_SMALL );
-	CG_Text_Paint (SB_TIME_X, y, 1.0f * scale, colorWhite, va("%i", score->time),0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_SMALL );
+	if ( SB_SHOW_CTF_COLUMNS )
+	{
+		if ( ci->team != TEAM_SPECTATOR )
+		{
+			CG_Text_Paint (SB_CAPS_X, y, SB_NUMBER_SCALE * scale, colorWhite,va("%i", score->captures),0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_SMALL );
+			CG_Text_Paint (SB_RET_X, y, SB_NUMBER_SCALE * scale, colorWhite,va("%i", score->impressiveCount),0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_SMALL );
+			CG_Text_Paint (SB_DEF_X, y, SB_NUMBER_SCALE * scale, colorWhite,va("%i", score->defendCount),0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_SMALL );
+		}
+		else
+		{
+			// Dashes rather than zeroes: a spectator has not captured
+			// nothing, the question does not apply to them.
+			CG_Text_Paint (SB_CAPS_X, y, SB_NUMBER_SCALE * scale, colorWhite,"-",0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_SMALL );
+			CG_Text_Paint (SB_RET_X, y, SB_NUMBER_SCALE * scale, colorWhite,"-",0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_SMALL );
+			CG_Text_Paint (SB_DEF_X, y, SB_NUMBER_SCALE * scale, colorWhite,"-",0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_SMALL );
+		}
+	}
+
+	CG_Text_Paint (SB_PING_X, y, SB_NUMBER_SCALE * scale, colorWhite,va("%i", score->ping),0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_SMALL );
+	CG_Text_Paint (SB_TIME_X, y, SB_NUMBER_SCALE * scale, colorWhite,va("%i", score->time),0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_SMALL );
 
 	// add the "ready" marker for intermission exiting
 	if ( cg.snap->ps.stats[ STAT_CLIENTS_READY ] & ( 1 << score->client ) ) 
@@ -381,6 +437,15 @@ qboolean CG_DrawOldScoreboard( void ) {
 	{
 		CG_Text_Paint ( SB_SCORE_X, y, 1.0f, colorWhite, /*CG_GetStripEdString("MENUS3", "SCORE")*/"Score", 0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_MEDIUM );
 	}
+	if ( SB_SHOW_CTF_COLUMNS )
+	{
+		// Single letters, matching the scoreboard the community already reads
+		// in NWH. Three-letter headers at FONT_MEDIUM are wider than the
+		// columns they label and run into each other.
+		CG_Text_Paint ( SB_CAPS_X, y, 1.0f, colorWhite, "C", 0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_MEDIUM );
+		CG_Text_Paint ( SB_RET_X, y, 1.0f, colorWhite, "R", 0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_MEDIUM );
+		CG_Text_Paint ( SB_DEF_X, y, 1.0f, colorWhite, "BC", 0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_MEDIUM );
+	}
 	CG_Text_Paint ( SB_PING_X, y, 1.0f, colorWhite, /*CG_GetStripEdString("MENUS0", "PING")*/"Ping", 0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_MEDIUM );
 	CG_Text_Paint ( SB_TIME_X, y, 1.0f, colorWhite, /*CG_GetStripEdString("MENUS3", "TIME")*/"Time", 0, 0, ITEM_TEXTSTYLE_OUTLINED, FONT_MEDIUM );
 
@@ -447,7 +512,14 @@ qboolean CG_DrawOldScoreboard( void ) {
 
 			//maxClients -= n2;
 
-			maxClients -= (team1MaxCl+team2MaxCl);
+			// Charge the budget for the lines actually drawn, not for what the
+			// teams were *allowed* to draw. team2MaxCl is set to the whole
+			// remainder above, so team1MaxCl+team2MaxCl always equals
+			// maxClients and this used to zero it -- which meant the spectator
+			// section below was handed a budget of 0 and drew nothing, in every
+			// team game, no matter how few players were on. That is why a
+			// spectator could never see who else was spectating.
+			maxClients -= (n1 + n2);
 		} else {
 			int team1MaxCl = CG_GetTeamCount(TEAM_BLUE, maxClients);
 			int team2MaxCl = CG_GetTeamCount(TEAM_RED, maxClients);
@@ -480,7 +552,14 @@ qboolean CG_DrawOldScoreboard( void ) {
 
 			//maxClients -= n2;
 
-			maxClients -= (team1MaxCl+team2MaxCl);
+			// Charge the budget for the lines actually drawn, not for what the
+			// teams were *allowed* to draw. team2MaxCl is set to the whole
+			// remainder above, so team1MaxCl+team2MaxCl always equals
+			// maxClients and this used to zero it -- which meant the spectator
+			// section below was handed a budget of 0 and drew nothing, in every
+			// team game, no matter how few players were on. That is why a
+			// spectator could never see who else was spectating.
+			maxClients -= (n1 + n2);
 		}
 		n1 = CG_TeamScoreboard( y, TEAM_SPECTATOR, fade, maxClients, lineHeight, qfalse );
 		y += (n1 * lineHeight) + BIGCHAR_HEIGHT;
