@@ -1032,7 +1032,7 @@ static int CG_CalcFov( void ) {
 		// drive fov_x from their zoom state -- which is not the view you are
 		// looking through once the camera is on someone else or detached, and
 		// which changes under you whenever the demo's own spectator switches
-		// target. Sam asked for an FOV that holds across the whole demo
+		// target. Sora asked for an FOV that holds across the whole demo
 		// regardless of player or camera mode, so this is where that is decided:
 		// cg_fov is the only thing that sets it.
 		if ( 0 )
