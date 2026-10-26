@@ -1780,6 +1780,8 @@ const char	*CG_PlaceString( int rank );
 void CG_EntityEvent( centity_t *cent, vec3_t position );
 void CG_PainEvent( centity_t *cent, int health );
 void CG_ReattachLimb(centity_t *source);
+int CG_ViewedClientNum( void );
+int CG_ListenerEntityNum( void );
 
 
 //

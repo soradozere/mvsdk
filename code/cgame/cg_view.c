@@ -2120,8 +2120,8 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView, qboolean demo
 		AnglesToAxis(lookAng, cg.refdef.viewaxis);
 	}
 
-	// update audio positions
-	trap_S_Respatialize( cg.snap->ps.clientNum, cg.refdef.vieworg, cg.refdef.viewaxis, inwater );
+	// update audio positions, heard as whoever the camera is on
+	trap_S_Respatialize( CG_ListenerEntityNum(), cg.refdef.vieworg, cg.refdef.viewaxis, inwater );
 
 	// make sure the lagometerSample and frame timing isn't done twice when in stereo
 	if ( stereoView != STEREO_RIGHT ) {

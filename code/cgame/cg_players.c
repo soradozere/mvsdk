@@ -5944,6 +5944,34 @@ void CG_ForceFPLSPlayerModel(centity_t *cent, clientInfo_t *ci)
 
 /*
 ===============
+CG_FriendViewerNum / CG_FriendViewerTeam
+
+Who the markers over teammates' heads are drawn for. In game that is always
+the player whose view this is; in a demo it is whoever the camera is on, so
+after a POV switch the markers move to the new player's team rather than
+staying on the recorder's. Free flight is nobody's view and sees the game as a
+spectator does, which marks every player.
+===============
+*/
+static int CG_FriendViewerNum( void ) {
+	if ( cg_demoCam.integer ) {
+		return -1;
+	}
+	return CG_ViewedClientNum();
+}
+
+static team_t CG_FriendViewerTeam( void ) {
+	if ( cg_demoCam.integer ) {
+		return TEAM_SPECTATOR;
+	}
+	if ( cg_demoFollow.integer >= 0 && cg_demoFollow.integer < MAX_CLIENTS ) {
+		return cgs.clientinfo[ cg_demoFollow.integer ].team;
+	}
+	return (team_t)cg.snap->ps.persistant[PERS_TEAM];
+}
+
+/*
+===============
 CG_Player
 ===============
 */
@@ -6211,9 +6239,9 @@ void CG_Player( centity_t *cent ) {
 	team = cgs.clientinfo[ cent->currentState.clientNum ].team;
 
 	if (cgs.gametype >= GT_TEAM && cg_drawFriend.integer &&
-		cent->currentState.number != cg.snap->ps.clientNum)			// Don't show a sprite above a player's own head in 3rd person.
+		cent->currentState.number != CG_FriendViewerNum())			// Don't show a sprite above a player's own head in 3rd person.
 	{	// If the view is either a spectator or on the same team as this character, show a symbol above their head.
-		if ((cg.snap->ps.persistant[PERS_TEAM] == TEAM_SPECTATOR || cg.snap->ps.persistant[PERS_TEAM] == team) &&
+		if ((CG_FriendViewerTeam() == TEAM_SPECTATOR || CG_FriendViewerTeam() == team) &&
 			!(cent->currentState.eFlags & EF_DEAD))
 		{
 			if (team == TEAM_RED)

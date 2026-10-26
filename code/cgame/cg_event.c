@@ -84,11 +84,33 @@ was recorded from. Kill messages read "You killed X" off this, so watching
 another player's POV shows their kills rather than the recorder's.
 =============
 */
-static int CG_ViewedClientNum( void ) {
+int CG_ViewedClientNum( void ) {
 	if ( cg_demoFollow.integer >= 0 && cg_demoFollow.integer < MAX_CLIENTS ) {
 		return cg_demoFollow.integer;
 	}
 	return cg.snap->ps.clientNum;
+}
+
+/*
+=============
+CG_ListenerEntityNum
+
+The entity the sound system treats as "you": its sounds play centred and at
+full volume, everyone else's are placed around the camera. This has to follow
+the camera, or after switching POV the recorder's footsteps and saber stay
+inside your head while the player on screen sounds distant.
+
+In free flight nobody is "you". ENTITYNUM_NONE never makes a sound of its own,
+so every sound keeps its position, while sounds meant to be heard everywhere
+(EV_GLOBAL_SOUND, powerup pickups) are started on this entity and stay
+undiminished wherever the camera is.
+=============
+*/
+int CG_ListenerEntityNum( void ) {
+	if ( cg_demoCam.integer ) {
+		return ENTITYNUM_NONE;
+	}
+	return CG_ViewedClientNum();
 }
 
 #ifdef __EMSCRIPTEN__
@@ -1396,7 +1418,7 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 			item = &bg_itemlist[ index ];
 			// powerup pickups are global
 			if( item->pickup_sound && item->pickup_sound[0] ) {
-				trap_S_StartSound (NULL, cg.snap->ps.clientNum, CHAN_AUTO, trap_S_RegisterSound( item->pickup_sound) );
+				trap_S_StartSound (NULL, CG_ListenerEntityNum(), CHAN_AUTO, trap_S_RegisterSound( item->pickup_sound) );
 			}
 
 			// show icon and name on status bar
@@ -2194,10 +2216,10 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 	case EV_GLOBAL_SOUND:	// play from the player's head so it never diminishes
 		DEBUGNAME("EV_GLOBAL_SOUND");
 		if ( VALID_INDEX(cgs.gameSounds, es->eventParm) && cgs.gameSounds[ es->eventParm ] ) {
-			trap_S_StartSound (NULL, cg.snap->ps.clientNum, CHAN_AUTO, cgs.gameSounds[ es->eventParm ] );
+			trap_S_StartSound (NULL, CG_ListenerEntityNum(), CHAN_AUTO, cgs.gameSounds[ es->eventParm ] );
 		} else {
 			s = CG_ConfigString( CS_SOUNDS + es->eventParm );
-			trap_S_StartSound (NULL, cg.snap->ps.clientNum, CHAN_AUTO, CG_CustomSound( es->number, s ) );
+			trap_S_StartSound (NULL, CG_ListenerEntityNum(), CHAN_AUTO, CG_CustomSound( es->number, s ) );
 		}
 		break;
 
