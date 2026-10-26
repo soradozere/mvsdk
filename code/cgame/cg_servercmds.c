@@ -99,6 +99,10 @@ static void CG_ParseScores( void ) {
 =================
 CG_ParseTeamInfo
 
+Each message replaces the list, but the data is also stamped per client: a
+server sending to spectators, and the merged demos in the library, send one
+message per team, alternating. The overlay draws from the stamps, so both teams
+stay up instead of the list flicking between them every second.
 =================
 */
 static void CG_ParseTeamInfo( void ) {
@@ -106,9 +110,20 @@ static void CG_ParseTeamInfo( void ) {
 	int		client;
 
 	numSortedTeamPlayers = atoi( CG_Argv( 1 ) );
+	if ( numSortedTeamPlayers < 0 ) {
+		numSortedTeamPlayers = 0;
+	} else if ( numSortedTeamPlayers > TEAM_MAXOVERLAY ) {
+		numSortedTeamPlayers = TEAM_MAXOVERLAY;
+	}
 
 	for ( i = 0 ; i < numSortedTeamPlayers ; i++ ) {
 		client = atoi( CG_Argv( i * 6 + 2 ) );
+		if ( client < 0 || client >= MAX_CLIENTS ) {
+			// demos are uploaded by anyone; an index off the end would write
+			// past clientinfo
+			numSortedTeamPlayers = i;
+			break;
+		}
 
 		sortedTeamPlayers[i] = client;
 
@@ -117,6 +132,7 @@ static void CG_ParseTeamInfo( void ) {
 		cgs.clientinfo[ client ].armor = atoi( CG_Argv( i * 6 + 5 ) );
 		cgs.clientinfo[ client ].curWeapon = atoi( CG_Argv( i * 6 + 6 ) );
 		cgs.clientinfo[ client ].powerups = atoi( CG_Argv( i * 6 + 7 ) );
+		cgs.clientinfo[ client ].teamInfoTime = cg.time;
 	}
 }
 
@@ -210,6 +226,51 @@ static void CG_ShaderStateChanged( const char *o ) {
 
 /*
 ================
+CG_SetLocationString
+
+TomArrow's (Tommyternal) yavin location overrides, shown when
+cg_drawTeamOverlayLocationOverrides is set: "(A)" and "(B)" in a team-coloured
+location name become "(Left)" or "(Right)" as seen from that team's side.
+================
+*/
+static const char *possibleLocationParts[] = {
+	"(A)",
+	"(B)",
+	" B)",
+	" A)",
+	"(B ",
+	"(A ",
+};
+static const int possibleLocationPartsCount = sizeof(possibleLocationParts) / sizeof(possibleLocationParts[0]);
+static void CG_SetLocationString( int num, const char *str ) {
+	int len = strlen(str);
+	cgs.locationStringOverrides[num][0] = '\0';
+	if (len + 4 < (int)sizeof(cgs.locationStringOverrides[num]) && !Q_stricmpn(cgs.mapname, "maps/ctf_yavin", 14) && str[0] == '^' && (str[1] == '1' || str[1] == '5')) {
+		int i;
+		team_t team = str[1] == '5' ? TEAM_BLUE : TEAM_RED;
+		const char *aOrB = NULL;
+		const char *replacement = NULL;
+		for (i = 0; i < possibleLocationPartsCount && !aOrB; i++) {
+			aOrB = strstr(str, possibleLocationParts[i]);
+		}
+		if (aOrB) {
+			if ((aOrB[1] == 'A' && team == TEAM_BLUE) || (aOrB[1] == 'B' && team == TEAM_RED)) {
+				replacement = "Right";
+			}
+			else {
+				replacement = "Left";
+			}
+		}
+		if (replacement) {
+			Q_strncpyz(cgs.locationStringOverrides[num], str, MIN((int)sizeof(cgs.locationStringOverrides[num]), aOrB - str + 1 + 1));
+			Q_strcat(cgs.locationStringOverrides[num], sizeof(cgs.locationStringOverrides[num]), replacement);
+			Q_strcat(cgs.locationStringOverrides[num], sizeof(cgs.locationStringOverrides[num]), aOrB+2);
+		}
+	}
+}
+
+/*
+================
 CG_ConfigStringModified
 
 ================
@@ -256,6 +317,10 @@ void CG_UpdateConfigString( int num, qboolean init )
 		if ( (!init || str[0]) /*&& str[0] != '*'*/ ) {
 			cgs.gameEffects[ num-CS_EFFECTS ] = trap_FX_RegisterEffect( str );
 		}
+	}
+	else if ( num >= CS_LOCATIONS && num < CS_LOCATIONS+MAX_LOCATIONS )
+	{
+		CG_SetLocationString( num-CS_LOCATIONS, str );
 	}
 	else if ( num >= CS_PLAYERS && num < CS_PLAYERS+MAX_CLIENTS )
 	{

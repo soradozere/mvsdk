@@ -549,6 +549,9 @@ vmCvar_t	cg_blood;
 vmCvar_t	cg_predictItems;
 vmCvar_t	cg_deferPlayers;
 vmCvar_t	cg_drawTeamOverlay;
+vmCvar_t	cg_drawTeamOverlayLocationOverrides;
+vmCvar_t	cg_drawTeamOverlayMaxPlayers;
+vmCvar_t	cg_drawTeamOverlayFollowTeamOnly;
 vmCvar_t	cg_teamOverlayUserinfo;
 vmCvar_t	cg_drawFriend;
 vmCvar_t	cg_teamChatsOnly;
@@ -744,6 +747,10 @@ static cvarTable_t cvarTable[] = { // bk001129
 	{ &cg_predictItems, "cg_predictItems", "1", CVAR_ARCHIVE },
 	{ &cg_deferPlayers, "cg_deferPlayers", "1", CVAR_ARCHIVE },
 	{ &cg_drawTeamOverlay, "cg_drawTeamOverlay", "0", CVAR_ARCHIVE },
+	// The next three are TomArrow's (Tommyternal), names and defaults kept
+	{ &cg_drawTeamOverlayLocationOverrides, "cg_drawTeamOverlayLocationOverrides", "0", CVAR_ARCHIVE },
+	{ &cg_drawTeamOverlayMaxPlayers, "cg_drawTeamOverlayMaxPlayers", "32", CVAR_ARCHIVE },
+	{ &cg_drawTeamOverlayFollowTeamOnly, "cg_drawTeamOverlayFollowTeamOnly", "0", CVAR_ARCHIVE },
 	{ &cg_teamOverlayUserinfo, "teamoverlay", "0", CVAR_ROM | CVAR_USERINFO },
 	{ &cg_stats, "cg_stats", "0", 0 },
 	{ &cg_drawFriend, "cg_drawFriend", "1", CVAR_ARCHIVE },
@@ -1407,6 +1414,24 @@ static void CG_RegisterEffects( void )
 
 	// Set up the glass effects mini-system.
 	CG_InitGlass();
+}
+
+/*
+=================
+CG_RegisterLocations
+
+Builds the optional location name overrides (cg_drawTeamOverlayLocationOverrides)
+from the gamestate. From Tommyternal.
+=================
+*/
+static void CG_RegisterLocations( void )
+{
+	int			i;
+
+	for ( i = 0 ; i < MAX_LOCATIONS ; i++ )
+	{
+		CG_UpdateConfigString( CS_LOCATIONS + i, qtrue );
+	}
 }
 
 //===================================================================================
@@ -2856,6 +2881,8 @@ Ghoul2 Insert End
 	CG_LoadingString( "graphics" );
 
 	CG_RegisterGraphics();
+
+	CG_RegisterLocations();
 
 	CG_LoadingString( "clients" );
 

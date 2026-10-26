@@ -477,6 +477,7 @@ typedef struct {
 	int				health;			// you only get this info about your teammates
 	int				armor;
 	int				curWeapon;
+	int				teamInfoTime;	// cg.time of the last tinfo naming this client
 
 	int				handicap;
 	int				wins, losses;	// in tourney mode
@@ -1391,6 +1392,7 @@ typedef struct {
 	qhandle_t		gameModels[MAX_MODELS];
 	sfxHandle_t		gameSounds[MAX_SOUNDS];
 	fxHandle_t		gameEffects[MAX_FX];
+	char			locationStringOverrides[MAX_LOCATIONS][64];
 /*
 Ghoul2 Insert Start
 */
@@ -1468,6 +1470,9 @@ extern	vmCvar_t		cg_drawScores;
 extern	vmCvar_t		cg_dynamicCrosshair;
 extern	vmCvar_t		cg_drawRewards;
 extern	vmCvar_t		cg_drawTeamOverlay;
+extern	vmCvar_t		cg_drawTeamOverlayLocationOverrides;
+extern	vmCvar_t		cg_drawTeamOverlayMaxPlayers;
+extern	vmCvar_t		cg_drawTeamOverlayFollowTeamOnly;
 extern	vmCvar_t		cg_teamOverlayUserinfo;
 extern	vmCvar_t		cg_crosshairX;
 extern	vmCvar_t		cg_crosshairY;
@@ -1747,6 +1752,7 @@ const char *CG_GameTypeString(void);
 qboolean CG_YourTeamHasFlag(void);
 qboolean CG_OtherTeamHasFlag(void);
 qhandle_t CG_StatusHandle(int task);
+const char* CG_GetLocationString(int location);
 
 
 
