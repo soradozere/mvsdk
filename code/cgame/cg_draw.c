@@ -1958,9 +1958,10 @@ cg_drawTeamOverlayMaxPlayers and narrowed by cg_drawTeamOverlayFollowTeamOnly.
 
 Reworked here for demos:
 - Rows come from the per-client tinfo stamps rather than the last message, so
-  both teams stay up when the data carries both (see CG_ParseTeamInfo).
-- "Your team" is the watched player's after a POV switch, not the recorder's.
-- A demo always shows every team unless FollowTeamOnly is set.
+  when the data carries both teams, either one is ready the moment the POV
+  switches to it (see CG_ParseTeamInfo).
+- A demo shows only the watched player's team, switching with the POV, not
+  the recorder's. All-teams stays for live spectators, as in Tommyternal.
 - Red then blue, by client number, so rows don't reorder as the POV changes.
 - Text goes through the font system rather than the bitmap charset, which
   draws every glyph as a bar in the browser build (PROGRESS.md, "2D text").
@@ -1991,17 +1992,16 @@ static float CG_DrawTeamOverlay( float y, qboolean right, qboolean upper ) {
 		return y;
 	}
 
-	if ( !cg_demoCam.integer && cg_demoFollow.integer >= 0 && cg_demoFollow.integer < MAX_CLIENTS ) {
-		viewTeam = cgs.clientinfo[ cg_demoFollow.integer ].team;
-	} else if ( cg_demoCam.integer ) {
-		viewTeam = TEAM_SPECTATOR;
+	if ( cg.demoPlayback ) {
+		// Only the watched player's team. Free flight keeps the team of
+		// whoever was watched last, since cg_demoFollow survives it.
+		viewTeam = cgs.clientinfo[ CG_ViewedClientNum() ].team;
+		allTeams = ( viewTeam != TEAM_RED && viewTeam != TEAM_BLUE );
 	} else {
 		viewTeam = (team_t)cg.snap->ps.persistant[PERS_TEAM];
+		allTeams = ( viewTeam != TEAM_RED && viewTeam != TEAM_BLUE ) ||
+			( ( cg.snap->ps.pm_flags & PMF_FOLLOW ) && !cg_drawTeamOverlayFollowTeamOnly.integer );
 	}
-
-	allTeams = ( viewTeam != TEAM_RED && viewTeam != TEAM_BLUE ) ||
-		( ( cg.demoPlayback || ( cg.snap->ps.pm_flags & PMF_FOLLOW ) ) &&
-		  !cg_drawTeamOverlayFollowTeamOnly.integer );
 
 	maxPlayers = cg_drawTeamOverlayMaxPlayers.integer;
 	if ( maxPlayers > MAX_CLIENTS ) {
