@@ -1948,6 +1948,226 @@ static void CG_TruncateLetters( char *out, int outSize, const char *s, int maxLe
 	out[o] = '\0';
 }
 
+
+/*
+=================
+Map locations, for players the recorded team info doesn't cover
+
+A demo carries the server's tinfo (location, health, armour) only for the team
+the recording client was following -- a raw demobot recording has one team's
+worth. Everyone's position is in the snapshots regardless, so the other team's
+location can be worked out the way the server does it (Team_GetLocation: the
+nearest target_location in the PVS). The target_locations themselves are server
+entities; the client has them only from the map's .ent override, which is where
+ctf_yavin_no_outside keeps all fifty, or failing that the BSP's own entities.
+They are matched to CS_LOCATIONS by name rather than by order.
+=================
+*/
+typedef struct {
+	vec3_t	origin;
+	int		index;		// into CS_LOCATIONS
+} cgMapLocation_t;
+
+static cgMapLocation_t	cg_mapLocations[MAX_LOCATIONS];
+static int				cg_numMapLocations;
+static char				cg_mapLocationsMap[MAX_QPATH];	// which map the table is for
+
+static void CG_AddMapLocation( const char *origin, const char *message, qboolean *used ) {
+	int i, match = 0;
+
+	if ( !*message || cg_numMapLocations >= MAX_LOCATIONS ) {
+		return;
+	}
+	// first unused configstring with this text; names repeat ("Halls (A)" on
+	// both sides of the same base) and any of a set is equally right
+	for ( i = 1; i < MAX_LOCATIONS; i++ ) {
+		if ( !strcmp( CG_ConfigString( CS_LOCATIONS + i ), message ) ) {
+			if ( !used[i] ) {
+				match = i;
+				break;
+			}
+			if ( !match ) {
+				match = i;
+			}
+		}
+	}
+	if ( !match ) {
+		return;
+	}
+	used[match] = qtrue;
+	for ( i = 0; i < 3; i++ ) {
+		cg_mapLocations[cg_numMapLocations].origin[i] = atof( COM_Parse( &origin ) );
+	}
+	cg_mapLocations[cg_numMapLocations].index = match;
+	cg_numMapLocations++;
+}
+
+// One entity's worth of key/value pairs, from either source, handed on if it
+// is a target_location.
+static void CG_ParseMapLocationEntity( const char *(*next)( void *ctx ), void *ctx, qboolean *used ) {
+	char		classname[64] = "", origin[64] = "", message[MAX_QPATH] = "";
+	char		key[64];
+	const char	*tok;
+
+	while ( 1 ) {
+		tok = next( ctx );
+		if ( !tok || !*tok || tok[0] == '}' ) {
+			break;
+		}
+		Q_strncpyz( key, tok, sizeof( key ) );
+		tok = next( ctx );
+		if ( !tok || !*tok || tok[0] == '}' ) {
+			break;
+		}
+		if ( !Q_stricmp( key, "classname" ) ) {
+			Q_strncpyz( classname, tok, sizeof( classname ) );
+		} else if ( !Q_stricmp( key, "origin" ) ) {
+			Q_strncpyz( origin, tok, sizeof( origin ) );
+		} else if ( !Q_stricmp( key, "message" ) ) {
+			Q_strncpyz( message, tok, sizeof( message ) );
+		}
+	}
+	if ( !Q_stricmp( classname, "target_location" ) && origin[0] ) {
+		CG_AddMapLocation( origin, message, used );
+	}
+}
+
+static const char *CG_NextFileToken( void *ctx ) {
+	return COM_ParseExt( (const char **)ctx, qtrue );
+}
+
+static const char *CG_NextEngineToken( void *ctx ) {
+	static char tok[MAX_STRING_CHARS];
+	return trap_GetEntityToken( tok, sizeof( tok ) ) ? tok : NULL;
+}
+
+static void CG_LoadMapLocations( void ) {
+	static char		buf[0x40000];
+	char			path[MAX_QPATH];
+	fileHandle_t	f;
+	int				len;
+	qboolean		used[MAX_LOCATIONS];
+	const char		*tok, *p;
+
+	if ( !Q_stricmp( cg_mapLocationsMap, cgs.mapname ) ) {
+		return;
+	}
+	// the cgame isn't unloaded between demos here, so this can't rely on CG_Init
+	// clearing it; keying on the map does the same job
+	Q_strncpyz( cg_mapLocationsMap, cgs.mapname, sizeof( cg_mapLocationsMap ) );
+	cg_numMapLocations = 0;
+	memset( used, 0, sizeof( used ) );
+
+	COM_StripExtension( cgs.mapname, path, sizeof( path ) );
+	Q_strcat( path, sizeof( path ), ".ent" );
+	len = trap_FS_FOpenFile( path, &f, FS_READ );
+	if ( f && len > 0 && len < (int)sizeof( buf ) ) {
+		trap_FS_Read( buf, len, f );
+		buf[len] = '\0';
+		trap_FS_FCloseFile( f );
+		p = buf;
+		while ( ( tok = CG_NextFileToken( &p ) ) && *tok ) {
+			if ( tok[0] == '{' ) {
+				CG_ParseMapLocationEntity( CG_NextFileToken, &p, used );
+			}
+		}
+		return;
+	}
+	if ( f ) {
+		trap_FS_FCloseFile( f );
+	}
+	while ( ( tok = CG_NextEngineToken( NULL ) ) && *tok ) {
+		if ( tok[0] == '{' ) {
+			CG_ParseMapLocationEntity( CG_NextEngineToken, NULL, used );
+		}
+	}
+}
+
+// Team_GetLocation, client side: the nearest location the point can see.
+static int CG_LocationForPoint( const vec3_t point ) {
+	int		i, best = 0;
+	float	len, bestlen = 3*8192.0f*8192.0f;
+	vec3_t	d;
+
+	CG_LoadMapLocations();
+	for ( i = 0; i < cg_numMapLocations; i++ ) {
+		VectorSubtract( point, cg_mapLocations[i].origin, d );
+		len = DotProduct( d, d );
+		if ( len > bestlen ) {
+			continue;
+		}
+		if ( !trap_R_inPVS( point, cg_mapLocations[i].origin ) ) {
+			continue;
+		}
+		bestlen = len;
+		best = cg_mapLocations[i].index;
+	}
+	return best;
+}
+
+/*
+=================
+CG_TeamOverlayRow
+
+What the overlay shows for one client, from the best source there is: the
+server's tinfo while it is current, else the recording client's own
+playerState, else that player's entity in the snapshot -- which has no health
+or armour (left at -1, drawn as a dash). qfalse if the demo has nothing on them
+at all right now.
+=================
+*/
+typedef struct {
+	int		location, health, armor, weapon, powerups;
+} teamOverlayRow_t;
+
+static qboolean CG_TeamOverlayRow( int clientNum, teamOverlayRow_t *row ) {
+	static int	locTime[MAX_CLIENTS], locCache[MAX_CLIENTS];
+	clientInfo_t	*ci = cgs.clientinfo + clientNum;
+	centity_t		*cent = cg_entities + clientNum;
+	const vec_t		*origin;
+	int				j;
+
+	if ( ci->teamInfoTime && ci->teamInfoTime <= cg.time &&
+		cg.time - ci->teamInfoTime <= TEAM_OVERLAY_STALE_MSEC ) {
+		row->location = ci->location;
+		row->health = ci->health;
+		row->armor = ci->armor;
+		row->weapon = ci->curWeapon;
+		row->powerups = ci->powerups;
+		return qtrue;
+	}
+
+	if ( clientNum == cg.snap->ps.clientNum ) {
+		origin = cg.snap->ps.origin;
+		row->health = cg.snap->ps.stats[STAT_HEALTH] > 0 ? cg.snap->ps.stats[STAT_HEALTH] : 0;
+		row->armor = cg.snap->ps.stats[STAT_ARMOR] > 0 ? cg.snap->ps.stats[STAT_ARMOR] : 0;
+		row->weapon = cg.snap->ps.weapon;
+		row->powerups = 0;
+		for ( j = 0; j < PW_NUM_POWERUPS; j++ ) {
+			if ( cg.snap->ps.powerups[j] > cg.time ) {
+				row->powerups |= 1 << j;
+			}
+		}
+	} else if ( cent->currentValid && cent->currentState.eType == ET_PLAYER ) {
+		origin = cent->lerpOrigin;
+		row->health = ( cent->currentState.eFlags & EF_DEAD ) ? 0 : -1;
+		row->armor = row->health;
+		row->weapon = cent->currentState.weapon;
+		row->powerups = cent->currentState.powerups;
+	} else {
+		return qfalse;
+	}
+
+	// a PVS sweep per player per frame is wasted on text read at a glance;
+	// twice a second is as often as the server's own tinfo
+	if ( !locTime[clientNum] || cg.time < locTime[clientNum] || cg.time - locTime[clientNum] > 500 ) {
+		locCache[clientNum] = CG_LocationForPoint( origin );
+		locTime[clientNum] = cg.time;
+	}
+	row->location = locCache[clientNum];
+	return qtrue;
+}
+
 /*
 =================
 CG_DrawTeamOverlay
@@ -1978,6 +2198,7 @@ static float CG_DrawTeamOverlay( float y, qboolean right, qboolean upper ) {
 	float pwidth, lwidth, nwidth;
 	int plyrs, maxPlayers;
 	int clients[MAX_CLIENTS];
+	teamOverlayRow_t rows[MAX_CLIENTS];
 	char st[16];
 	char name[MAX_QPATH];
 	char loc[MAX_QPATH];
@@ -2017,8 +2238,7 @@ static float CG_DrawTeamOverlay( float y, qboolean right, qboolean upper ) {
 		}
 		for (i = 0; i < MAX_CLIENTS && plyrs < maxPlayers; i++) {
 			ci = cgs.clientinfo + i;
-			if ( !ci->infoValid || ci->team != t || !ci->teamInfoTime ||
-				ci->teamInfoTime > cg.time || cg.time - ci->teamInfoTime > TEAM_OVERLAY_STALE_MSEC ) {
+			if ( !ci->infoValid || ci->team != t || !CG_TeamOverlayRow( i, &rows[plyrs] ) ) {
 				continue;
 			}
 			clients[plyrs++] = i;
@@ -2089,7 +2309,7 @@ static float CG_DrawTeamOverlay( float y, qboolean right, qboolean upper ) {
 		// powerups (in CTF, the flag) in the first column
 		xx = x + TEAM_OVERLAY_PAD;
 		for (j = 0; j < PW_NUM_POWERUPS; j++) {
-			if (ci->powerups & (1 << j)) {
+			if (rows[i].powerups & (1 << j)) {
 				item = BG_FindItemForPowerup( j );
 				if (item) {
 					CG_DrawPic( xx, y, iconW, rowH, trap_R_RegisterShader( item->icon ) );
@@ -2105,7 +2325,7 @@ static float CG_DrawTeamOverlay( float y, qboolean right, qboolean upper ) {
 		xx += pwidth + TEAM_OVERLAY_PAD * 3;
 
 		if (lwidth) {
-			p = CG_GetLocationString(ci->location);
+			p = CG_GetLocationString(rows[i].location);
 			if (!p || !*p)
 				p = "unknown";
 			CG_TruncateLetters( loc, sizeof(loc), p, TEAM_OVERLAY_MAXLOCATION_WIDTH );
@@ -2114,21 +2334,34 @@ static float CG_DrawTeamOverlay( float y, qboolean right, qboolean upper ) {
 			xx += lwidth + TEAM_OVERLAY_PAD * 3;
 		}
 
-		CG_GetColorForHealth( ci->health, ci->armor, hcolor );
+		// -1 is "not in the recording" (see CG_TeamOverlayRow): a grey dash
+		if ( rows[i].health < 0 ) {
+			Vector4Copy( colorLtGrey, hcolor );
+		} else {
+			CG_GetColorForHealth( rows[i].health, rows[i].armor, hcolor );
+		}
 
-		Com_sprintf( st, sizeof(st), "%i", ci->health );
+		if ( rows[i].health < 0 ) {
+			Q_strncpyz( st, "-", sizeof(st) );
+		} else {
+			Com_sprintf( st, sizeof(st), "%i", rows[i].health );
+		}
 		CG_Text_Paint( xx + nwidth - CG_Text_Width( st, TEAM_OVERLAY_SCALE, FONT_SMALL ), y,
 			TEAM_OVERLAY_SCALE, hcolor, st, 0, 0, ITEM_TEXTSTYLE_SHADOWED, FONT_SMALL );
 		xx += nwidth + TEAM_OVERLAY_PAD * 2;
 
-		Com_sprintf( st, sizeof(st), "%i", ci->armor );
+		if ( rows[i].armor < 0 ) {
+			Q_strncpyz( st, "-", sizeof(st) );
+		} else {
+			Com_sprintf( st, sizeof(st), "%i", rows[i].armor );
+		}
 		CG_Text_Paint( xx + nwidth - CG_Text_Width( st, TEAM_OVERLAY_SCALE, FONT_SMALL ), y,
 			TEAM_OVERLAY_SCALE, hcolor, st, 0, 0, ITEM_TEXTSTYLE_SHADOWED, FONT_SMALL );
 		xx += nwidth + TEAM_OVERLAY_PAD * 2;
 
 		// weapon icon
-		if ( ci->curWeapon > WP_NONE && ci->curWeapon < WP_NUM_WEAPONS && cg_weapons[ci->curWeapon].weaponIcon ) {
-			CG_DrawPic( xx, y, iconW, rowH, cg_weapons[ci->curWeapon].weaponIcon );
+		if ( rows[i].weapon > WP_NONE && rows[i].weapon < WP_NUM_WEAPONS && cg_weapons[rows[i].weapon].weaponIcon ) {
+			CG_DrawPic( xx, y, iconW, rowH, cg_weapons[rows[i].weapon].weaponIcon );
 		}
 
 		y += rowH;
